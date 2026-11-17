@@ -73,6 +73,20 @@ function clock(at, offsetMin) {
  *   starts, or -1 when it rains now or stays dry for the next 2 hours.
  */
 export function headline(series, now, offsetMin, language) {
+  // Its wording changes with the minute at most, and finding the next rain means walking the series: the answer
+  // for this series and this minute is kept, since the app asks on every frame.
+  const minute = Math.floor(now / 60000);
+  if (kept && kept.series === series && kept.minute === minute && kept.offsetMin === offsetMin && kept.language === language) {
+    return kept.words;
+  }
+  kept = { series, minute, offsetMin, language, words: phrase(series, now, offsetMin, language) };
+  return kept.words;
+}
+
+/** The last headline made, and what it was made for. */
+let kept = null;
+
+function phrase(series, now, offsetMin, language) {
   const words = WORDS[language] || WORDS.en;
   const levels = series.levels;
   const first = Math.max(0, Math.floor((now - series.base) / STEP_MS));

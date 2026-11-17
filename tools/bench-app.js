@@ -19,12 +19,18 @@ for (let i = 0; i < STEPS; i++) {
   series.levels[i] = wave < 40 ? 75 + ((wave * 3 + i) % 70) : 0;
 }
 
+/** Two dry days with one shower at the very end: the headline has to look all the way to find it. */
+const dry = { base: series.base, levels: new Uint8Array(STEPS), radar: true };
+dry.levels.fill(110, STEPS - 6);
+
 /** One frame of the timeline, as the app paints it: `key` says whether the picture is new. */
-function chart(hours, key, t) {
-  const now = series.base;
+function chart(hours, key, t, data = series) {
+  const now = data.base;
+  // The app asks for the headline on every frame, for the alert and the back display.
+  headline(data, now + t, 60, "en");
   if (key !== chart.sampled) {
     chart.sampled = key;
-    sampleColumns(series, now, hours, columns);
+    sampleColumns(data, now, hours, columns);
   }
   drawChart(front, key, columns, hours, 1274, t, { label: "", dry: "", stale: false });
   return [bitmap("front", toXpm(front), 0, 0, "front")];
@@ -46,6 +52,7 @@ const SCREENS = [
   // At rest only the shimmer moves: the picture is copied, not painted.
   { name: "rest2h", frame: (t) => chart(2, "rest2", t) },
   { name: "rest48h", frame: (t) => chart(48, "rest48", t) },
+  { name: "restdry", frame: (t) => chart(48, "dry48", t, dry) },
   // While the window slides every frame is a new picture.
   { name: "slide", frame: (t) => chart(2 * Math.pow(1.4, t), "slide" + t, t) },
   // New data or a turn of the wheel: both displays.
