@@ -5,7 +5,7 @@
     "place": {
       "type": "geolocation",
       "label": "Place",
-      "description": "The spot the rain is shown for. The radar reaches the Netherlands and Belgium; elsewhere the forecast comes from the weather model alone.",
+      "description": "The spot the rain is shown for. Rain is local: after detecting the place automatically, check that it names your town, and type it yourself if it is off. The radar reaches the Netherlands and Belgium; elsewhere the forecast comes from the weather model alone.",
       "default": { "mode": "fixed", "name": "Amsterdam", "lat": 52.37, "lon": 4.89 }
     },
     "zoom": {
