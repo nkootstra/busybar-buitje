@@ -273,8 +273,12 @@ function frame(now) {
     shownFront = xpm;
     elements.push(bitmap("front", xpm, 0, 0, "front"));
   }
-  const back = backElements(now, words);
-  for (let i = 0; i < back.length; i++) elements.push(back[i]);
+  // While the window slides the front comes first: the back display follows when it has settled, once, however
+  // many clicks the wheel made.
+  if (now - zoomAt >= ZOOM_MS) {
+    const back = backElements(now, words);
+    for (let i = 0; i < back.length; i++) elements.push(back[i]);
+  }
   return elements;
 }
 

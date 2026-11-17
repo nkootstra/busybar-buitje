@@ -75,6 +75,19 @@ test("the wheel sets how far ahead it looks, and says so for a moment", async ()
   assert.equal(bar.text("window"), "Next 1 hour on the front");
 });
 
+test("while the wheel turns the front comes first; the back display follows once it rests", async () => {
+  const bar = await launch(app, live());
+  const strip = bar.back.map.data;
+  await bar.wheel(1);
+  await bar.wheel(1);
+  await bar.wheel(1);
+  assert.equal(bar.text("window"), "Next 2 hours on the front", "not yet");
+  assert.equal(bar.back.map.data, strip);
+  await bar.advance(1500);
+  assert.equal(bar.text("window"), "Next 9 hours on the front");
+  assert.notEqual(bar.back.map.data, strip);
+});
+
 test("left alone, the window goes back to the one in the settings", async () => {
   const bar = await launch(app, live({ settings: { zoom: "5" } }));
   assert.equal(bar.text("window"), "Next 5 hours on the front");
