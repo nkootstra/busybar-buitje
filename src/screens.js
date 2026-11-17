@@ -30,18 +30,20 @@ function tickEvery(hours) {
   return hours <= 5 ? 60 : hours <= 18 ? 180 : 360;
 }
 
+/** The timeline with nothing on it: the night, and the axis along the top. Every picture starts as a copy. */
+const EMPTY = [];
+for (let i = 0; i < W * H; i++) EMPTY.push(i < W ? "a" : "n");
+
 function paintChart(cv, columns, hours, nowMinutes) {
-  fill(cv, "n");
-  rect(cv, 0, 0, W, 1, "a");
+  cv.px = EMPTY.slice();
+  // A tick at every hour mark in the window; midnight stands out.
   const span = (hours * 60) / W;
   const every = tickEvery(hours);
-  for (let c = 0; c < W; c++) {
-    // A tick where an hour mark falls in this column; midnight stands out.
-    const from = nowMinutes + c * span;
-    const to = from + span;
-    if (Math.floor(to / 1440) > Math.floor(from / 1440)) set(cv, c, 0, "w");
-    else if (Math.floor(to / every) > Math.floor(from / every)) set(cv, c, 0, "t");
+  for (let mark = Math.ceil(nowMinutes / every) * every; mark - nowMinutes < hours * 60; mark += every) {
+    set(cv, Math.floor((mark - nowMinutes) / span), 0, mark % 1440 === 0 ? "w" : "t");
+  }
 
+  for (let c = 0; c < W; c++) {
     const level = columns[c];
     const rows = rowsFor(level, ROWS);
     reach[c] = rows;
