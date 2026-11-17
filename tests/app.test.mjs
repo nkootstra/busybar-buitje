@@ -41,7 +41,8 @@ test("it shows the rain ahead and says what is coming", async () => {
   // Dry for the first half hour: nothing under the first columns.
   for (let y = 1; y < 16; y++) assert.equal(bar.front[y].slice(0, 18), "n".repeat(18));
   assert.equal(bar.text("head1"), "Drizzle in 30 minutes");
-  assert.equal(bar.text("head2"), "Amsterdam");
+  assert.equal(bar.text("head2"), "Utrecht");
+  assert.match(bar.requests[0], /\?lat=52\.09&lon=5\.12$/, "without a place it asks for Utrecht");
   assert.equal(bar.text("window"), "Next 2 hours on the front");
   assert.equal(bar.text("source"), "Buienradar + KNMI via Open-Meteo");
   assert.equal(bar.back.map.type, "xpmbitmap");
@@ -49,12 +50,12 @@ test("it shows the rain ahead and says what is coming", async () => {
 });
 
 test("it asks each source once at the start, for the place in the settings", async () => {
-  const place = { mode: "fixed", name: "Utrecht", lat: 52.09083, lon: 5.12222 };
+  const place = { mode: "fixed", name: "Groningen", lat: 53.21917, lon: 6.56667 };
   const bar = await launch(app, live({ settings: { place } }));
   assert.equal(bar.requests.length, 2);
-  assert.match(bar.requests[0], /^https:\/\/gpsgadget\.buienradar\.nl\/data\/raintext\?lat=52\.09&lon=5\.12$/);
-  assert.match(bar.requests[1], /^http:\/\/api\.open-meteo\.com\/v1\/forecast\?latitude=52\.09&longitude=5\.12&/);
-  assert.equal(bar.text("head2"), "Utrecht");
+  assert.match(bar.requests[0], /^https:\/\/gpsgadget\.buienradar\.nl\/data\/raintext\?lat=53\.22&lon=6\.57$/);
+  assert.match(bar.requests[1], /^http:\/\/api\.open-meteo\.com\/v1\/forecast\?latitude=53\.22&longitude=6\.57&/);
+  assert.equal(bar.text("head2"), "Groningen");
 });
 
 test("the wheel sets how far ahead it looks, and says so for a moment", async () => {

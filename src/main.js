@@ -73,7 +73,10 @@ const TEXTS = {
 const front = createCanvas(72, 16);
 const columns = new Uint8Array(72);
 
-let settings = { lat: 52.37, lon: 4.89, place: "Amsterdam", zoom: 1, alert: 15, sound: false, language: "en" };
+/** Where the rain is shown when no place is set: the middle of the Netherlands. */
+const HOME = { name: "Utrecht", lat: 52.09, lon: 5.12 };
+
+let settings = { lat: HOME.lat, lon: HOME.lon, place: HOME.name, zoom: 1, alert: 15, sound: false, language: "en" };
 let texts = TEXTS.en;
 /** The bar's zone, minutes east of UTC, and when it was last asked. */
 let offset = 0;
@@ -369,9 +372,9 @@ function readSettings(values) {
   const zoomAt = ZOOMS.indexOf(parseInt(values.zoom, 10));
   const lead = parseInt(values.alert, 10);
   return {
-    lat: fixed ? place.lat : 52.37,
-    lon: fixed ? place.lon : 4.89,
-    place: fixed && place.name ? String(place.name) : "Amsterdam",
+    lat: fixed ? place.lat : HOME.lat,
+    lon: fixed ? place.lon : HOME.lon,
+    place: fixed && place.name ? String(place.name) : HOME.name,
     zoom: zoomAt < 0 ? 1 : zoomAt,
     alert: values.alert === undefined ? 15 : lead > 0 ? lead : 0,
     sound: values.sound === true,
