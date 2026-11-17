@@ -25,6 +25,17 @@ function rowsFor(level, rows) {
   return Math.max(1, Math.min(rows, Math.floor(((level - FAINT + 4) * rows) / 75)));
 }
 
+/**
+ * For every rain level, how far its bar reaches on the front and how dense its grain is: looked up while
+ * painting, since the bar is slow at the divisions behind them.
+ */
+const REACH = new Uint8Array(256);
+const DENSITY = new Uint8Array(256);
+for (let level = 0; level < 256; level++) {
+  REACH[level] = rowsFor(level, ROWS);
+  DENSITY[level] = level < FAINT ? 0 : Math.min(242, 70 + Math.floor(((level - FAINT) * 17) / 5));
+}
+
 /** The hour marks on the axis: every hour up to a 5-hour window, every 3 up to 18, then every 6. */
 function tickEvery(hours) {
   return hours <= 5 ? 60 : hours <= 18 ? 180 : 360;
@@ -45,16 +56,16 @@ function paintChart(cv, columns, hours, nowMinutes) {
 
   for (let c = 0; c < W; c++) {
     const level = columns[c];
-    const rows = rowsFor(level, ROWS);
+    const rows = REACH[level];
     reach[c] = rows;
     if (!rows) continue;
-    const density = Math.min(242, 70 + Math.floor(((level - FAINT) * 17) / 5));
+    const density = DENSITY[level];
+    const px = cv.px;
     for (let r = 0; r < rows; r++) {
       const grain = GRAIN[c * ROWS + r];
       if (grain >= density) continue;
       // Bright specks in the body of the rain, a darker fringe where it ends.
-      const c1 = grain * 5 < density ? "R" : r >= rows - 2 && grain * 5 > density * 3 ? "d" : "r";
-      cv.px[(1 + r) * W + c] = c1;
+      px[(1 + r) * W + c] = grain * 5 < density ? "R" : r >= rows - 2 && grain * 5 > density * 3 ? "d" : "r";
     }
   }
   set(cv, 0, 0, "w");

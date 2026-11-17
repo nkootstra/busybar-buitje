@@ -4,7 +4,7 @@
 import { backText, bitmap, draw } from "./bar.js";
 import { createCanvas, toXpm } from "./canvas.js";
 import { headline } from "./headline.js";
-import { STEPS, sampleColumns } from "./rain.js";
+import { STEPS, buildSeries, sampleColumns } from "./rain.js";
 import { drawChart, mapXpm } from "./screens.js";
 
 const APP = "io.kootstra.buitje.bench";
@@ -57,12 +57,23 @@ const SCREENS = [
   { name: "slide", frame: (t) => chart(2 * Math.pow(1.4, t), "slide" + t, t) },
   // New data or a turn of the wheel: both displays.
   { name: "both", frame: (t) => everything(t) },
+  // The app's own work alone, with nothing sent: a resting frame, a frame of the slide, and joining fresh
+  // answers of the sources into a series.
+  { name: "restjs", unsent: true, frame: (t) => chart(2, "rest2", t) },
+  { name: "slidejs", unsent: true, frame: (t) => chart(2 * Math.pow(1.4, t), "js" + t, t) },
+  { name: "joinjs", unsent: true, frame: () => buildSeries(series.base, 60, NOWCAST, MODEL) },
 ];
+
+/** Answers of the two sources as the parsers give them: 2 hours of radar, 49 hours of model. */
+const NOWCAST = { minutes: 1275, levels: [] };
+for (let i = 0; i < 24; i++) NOWCAST.levels.push(i % 7 < 3 ? 90 + i : 0);
+const MODEL = { hours: { end: series.base, levels: [] }, quarters: null };
+for (let i = 0; i < 49; i++) MODEL.hours.levels.push(i % 5 < 2 ? 100 + i : 0);
 
 let total = 0;
 function run(index) {
   if (index === SCREENS.length) {
-    console.log("bench frame_ms " + (total / SCREENS.length).toFixed(1));
+    console.log("bench frame_ms " + (total / SCREENS.filter((screen) => !screen.unsent).length).toFixed(1));
     return;
   }
   const screen = SCREENS[index];
@@ -70,12 +81,15 @@ function run(index) {
   const step = (t) => {
     if (t === FRAMES) {
       const frame = (Date.now() - started) / FRAMES;
-      total += frame;
+      // The mean is of what a person sees: the frames that are sent.
+      if (!screen.unsent) total += frame;
       console.log("bench " + screen.name + " " + frame.toFixed(1));
       setTimeout(() => run(index + 1), 0);
       return;
     }
-    draw(APP, screen.frame(t)).then(() => step(t + 1));
+    const elements = screen.frame(t);
+    if (screen.unsent) setTimeout(() => step(t + 1), 0);
+    else draw(APP, elements).then(() => step(t + 1));
   };
   step(0);
 }
