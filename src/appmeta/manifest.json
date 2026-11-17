@@ -1,0 +1,10 @@
+{
+  "format_version": 1,
+  "id": "io.kootstra.buitje",
+  "name": "Buitje",
+  "version": "0.1.0",
+  "api_version": "27.12.0",
+  "description": "The rain ahead for your spot, from the next hour to the next two days.",
+  "author": "Niels Kootstra",
+  "heap_size_kib": 160
+}

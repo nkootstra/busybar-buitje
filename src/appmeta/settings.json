@@ -1,0 +1,57 @@
+{
+  "format_version": 1,
+  "version": 1,
+  "fields": {
+    "place": {
+      "type": "geolocation",
+      "label": "Place",
+      "description": "The spot the rain is shown for. The radar reaches the Netherlands and Belgium; elsewhere the forecast comes from the weather model alone.",
+      "default": { "mode": "fixed", "name": "Amsterdam", "lat": 52.37, "lon": 4.89 }
+    },
+    "zoom": {
+      "type": "enum",
+      "label": "Window",
+      "description": "How far ahead the timeline looks when the app starts. The wheel changes it; left alone, it comes back to this.",
+      "default": "2",
+      "options": [
+        { "value": "1", "label": "Next hour" },
+        { "value": "2", "label": "Next 2 hours" },
+        { "value": "3", "label": "Next 3 hours" },
+        { "value": "5", "label": "Next 5 hours" },
+        { "value": "9", "label": "Next 9 hours" },
+        { "value": "12", "label": "Next 12 hours" },
+        { "value": "18", "label": "Next 18 hours" },
+        { "value": "24", "label": "Next 24 hours" },
+        { "value": "36", "label": "Next 36 hours" },
+        { "value": "48", "label": "Next 48 hours" }
+      ]
+    },
+    "alert": {
+      "type": "enum",
+      "label": "Rain alert",
+      "description": "The status light blinks when rain is about to start, this long ahead.",
+      "default": "15",
+      "options": [
+        { "value": "0", "label": "Off" },
+        { "value": "5", "label": "5 minutes ahead" },
+        { "value": "10", "label": "10 minutes ahead" },
+        { "value": "15", "label": "15 minutes ahead" },
+        { "value": "30", "label": "30 minutes ahead" }
+      ]
+    },
+    "sound": {
+      "type": "boolean",
+      "label": "Sound with the alert",
+      "default": false
+    },
+    "language": {
+      "type": "enum",
+      "label": "Language",
+      "default": "en",
+      "options": [
+        { "value": "en", "label": "English" },
+        { "value": "nl", "label": "Nederlands" }
+      ]
+    }
+  }
+}
