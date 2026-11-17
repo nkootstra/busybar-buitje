@@ -51,7 +51,7 @@ const words = headline(series, now, offset, "en");
 drawHeadline(cv, words.top, words.bottom, words.wet || words.startsIn >= 0);
 place(cv.px, 72, 16, WINDOWS.length);
 
-const map = mapXpm(series, now, 5).split("\n");
+const map = mapXpm(series, now, 5, "preview").split("\n");
 const strip = map.slice(map.length - 14).join("").split("");
 place(strip, 144, 14, WINDOWS.length + 1);
 

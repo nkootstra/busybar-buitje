@@ -130,25 +130,44 @@ const MAP_H = 14;
 const MAP_ROWS = MAP_H - 2;
 const mapColumns = new Uint8Array(MAP_W);
 
+/** The strip's rows of rain as text, once with the lit ground inside the frame and once with the dark outside. */
+let mapFor = "";
+let mapInside = [];
+let mapOutside = [];
+const MAP_EDGE = new Array(MAP_W + 1).join("w");
+const MAP_DARK = new Array(MAP_W + 1).join(".");
+
+function paintMap(series, now) {
+  sampleColumns(series, now, 48, mapColumns);
+  mapInside = [];
+  mapOutside = [];
+  for (let y = 0; y < MAP_ROWS; y++) {
+    const inside = [];
+    const outside = [];
+    for (let x = 0; x < MAP_W; x++) {
+      const rain = y < rowsFor(mapColumns[x], MAP_ROWS) ? (mapColumns[x] >= HEAVY ? "l" : "K") : "";
+      inside.push(rain || "G");
+      outside.push(rain || ".");
+    }
+    mapInside.push(inside.join(""));
+    mapOutside.push(outside.join(""));
+  }
+}
+
 /**
  * The 48 hours ahead as a strip for the back display, an XPM2 bitmap: rain hangs down as on the front, and a
- * frame marks the `hours` the front shows. It is written row by row as text, so that the bar never holds a
- * canvas of it.
+ * frame marks the `hours` the front shows. The rain is worked out once for each `key` (new data, or a later
+ * now); another window only moves the frame, which is a matter of cutting those rows of text.
  */
-export function mapXpm(series, now, hours) {
-  sampleColumns(series, now, 48, mapColumns);
-  const frame = Math.max(3, Math.round((MAP_W * hours) / 48));
-  const rows = [xpmHeader(MAP_W, MAP_H)];
-  for (let y = 0; y < MAP_H; y++) {
-    const edge = y === 0 || y === MAP_H - 1;
-    const row = [];
-    for (let x = 0; x < MAP_W; x++) {
-      const inside = x < frame;
-      if (inside && (edge || x === 0 || x === frame - 1)) row.push("w");
-      else if (!edge && y - 1 < rowsFor(mapColumns[x], MAP_ROWS)) row.push(mapColumns[x] >= HEAVY ? "l" : "K");
-      else row.push(inside ? "G" : ".");
-    }
-    rows.push(row.join(""));
+export function mapXpm(series, now, hours, key) {
+  if (key !== mapFor) {
+    mapFor = key;
+    paintMap(series, now);
   }
+  const frame = Math.max(3, Math.round((MAP_W * hours) / 48));
+  const edge = MAP_EDGE.slice(0, frame) + MAP_DARK.slice(frame);
+  const rows = [xpmHeader(MAP_W, MAP_H), edge];
+  for (let y = 0; y < MAP_ROWS; y++) rows.push("w" + mapInside[y].slice(1, frame - 1) + "w" + mapOutside[y].slice(frame));
+  rows.push(edge);
   return rows.join("\n");
 }

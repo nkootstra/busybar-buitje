@@ -243,7 +243,8 @@ function backElements(now, words) {
     return [line("head1", settings.place, 6, WHITE), line("head2", message, 20, LIGHT)];
   }
   // It follows the window the wheel chose, not every step of the slide, and the quarter of an hour.
-  const key = version + "|" + zoom + "|" + words.full + "|" + Math.floor(now / (15 * 60000));
+  const quarter = Math.floor(now / (15 * 60000));
+  const key = version + "|" + zoom + "|" + words.full + "|" + quarter;
   if (key === shownBack) return [];
   shownBack = key;
 
@@ -254,7 +255,7 @@ function backElements(now, words) {
   return [
     line("head1", lines[0], 4, WHITE),
     line("head2", lines[1] || settings.place, 15, lines[1] ? WHITE : GREY),
-    bitmap("map", mapXpm(series, now, ZOOMS[zoom]), LEFT, 29, "back"),
+    bitmap("map", mapXpm(series, now, ZOOMS[zoom], version + "|" + quarter), LEFT, 29, "back"),
     line("now", midnight > LEFT + 24 ? texts.now : " ", 45, GREY),
     line("day", texts.tomorrow, 45, GREY, midnight),
     line("window", texts.window(ZOOMS[zoom]), 57, LIGHT),
