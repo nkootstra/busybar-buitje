@@ -32,8 +32,10 @@ const MODEL = { hours: { end: start, span: 3600000, levels: [] }, quarters: null
 for (let i = 0; i < 49; i++) MODEL.hours.levels.push(i % 5 < 2 ? 100 + i : 0);
 
 /** What to show at frame `t`: `series` in a window of `hours`, an hour east of UTC. */
-function show(series, version, hours, t) {
-  return describe({ series, version, freshAt: start, now: start + t, zone: 60, hours, window: Math.round(hours), place: "Utrecht", frame: t });
+function show(series, version, hours, t, labelled) {
+  // While it slides the window is named for the length it is sliding to, which the wheel chose: 48 here.
+  const window = labelled ? 48 : Math.round(hours);
+  return describe({ series, version, freshAt: start, now: start + t, zone: 60, hours, window, labelled, place: "Utrecht", frame: t });
 }
 
 function frontOf(what) {
@@ -47,8 +49,10 @@ const SCREENS = [
   { name: "rest2h", frame: (t) => frontOf(show(rainy, 1, 2, t)) },
   { name: "rest48h", frame: (t) => frontOf(show(rainy, 1, 48, t)) },
   { name: "restdry", frame: (t) => frontOf(show(dry, 2, 48, t)) },
-  // While the window slides every frame is a new picture.
-  { name: "slide", frame: (t) => frontOf(show(rainy, 1, 2 * Math.pow(1.4, t), t)) },
+  // While the window slides every frame is a new picture, with the window's name on it.
+  { name: "slide", frame: (t) => frontOf(show(rainy, 1, 2 * Math.pow(1.4, t), t, true)) },
+  // The name stays on show for a moment after the slide.
+  { name: "label", frame: (t) => frontOf(show(rainy, 1, 9, t, true)) },
   // New data or a settled turn of the wheel: both displays.
   { name: "both", frame: (t) => frontOf(show(rainy, 3, 5 + (t % 3), t)).concat(backElements(show(rainy, 3, 5 + (t % 3), t))) },
   { name: "restjs", unsent: true, frame: (t) => frontOf(show(rainy, 1, 2, t)) },

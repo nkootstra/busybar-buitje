@@ -35,10 +35,20 @@ export function reachOf(level, rows) {
   return Math.max(1, Math.min(rows, Math.floor(((level - FAINT + 4) * rows) / 75)));
 }
 
-/** The level at moment `at` from a block of values that each cover the `span` ms before their time; -1 outside it. */
-function levelAt(block, at) {
-  const index = Math.floor((at - block.end) / block.span) + 1;
-  return index >= 0 && index < block.levels.length ? block.levels[index] : -1;
+/**
+ * Writes a block of values, each covering the `span` ms before its time, into the steps of a series that
+ * starts at `base`: a step takes the value its middle falls in. Returns the step after the last one written.
+ */
+function fillFrom(block, base, levels) {
+  // The step whose middle is the first at or after moment `at`.
+  const stepAt = (at) => Math.max(0, Math.min(STEPS, Math.ceil((at - base - STEP_MS / 2) / STEP_MS)));
+  let end = 0;
+  for (let k = 0; k < block.levels.length; k++) {
+    const from = stepAt(block.end + (k - 1) * block.span);
+    end = stepAt(block.end + k * block.span);
+    if (end > from) levels.fill(block.levels[k], from, end);
+  }
+  return end;
 }
 
 /**
@@ -62,15 +72,9 @@ export function buildSeries(now, nowcast, model) {
   let known = 0;
 
   if (model) {
-    for (let i = 0; i < STEPS; i++) {
-      // The middle of the step decides which hour or quarter it belongs to.
-      const at = base + i * STEP_MS + STEP_MS / 2;
-      let level = model.quarters && !nowcast ? levelAt(model.quarters, at) : -1;
-      if (level < 0) level = levelAt(model.hours, at);
-      if (level < 0) continue;
-      levels[i] = level;
-      known = i + 1;
-    }
+    known = fillFrom(model.hours, base, levels);
+    // Without radar the model's quarters are the finer picture of the first hours.
+    if (model.quarters && !nowcast) known = Math.max(known, fillFrom(model.quarters, base, levels));
   }
 
   if (nowcast) {

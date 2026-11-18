@@ -70,7 +70,37 @@ function tickEvery(hours) {
   return hours <= 5 ? 60 : hours <= 18 ? 180 : 360;
 }
 
-function paintTimeline(cv, show) {
+/** The window's name as last painted: its text, its width, and where its lit pixels are, worked out once. */
+const label = { text: "", width: 0, lit: [] };
+
+/** The rows a bar may reach where the window's name stands under it, in the bottom-right corner. */
+const ABOVE_LABEL = 7;
+
+/**
+ * Makes `str` the window's name and returns the column its corner starts at. The name is painted on every
+ * frame of the slide, so its letters' pixels are found once for each name, and the rain is kept out of its
+ * corner instead of being painted and then covered.
+ */
+function labelFrom(str) {
+  if (str !== label.text) {
+    const scratch = createCanvas(textWidth(str), 5);
+    text(scratch, 0, 0, str, "w");
+    label.text = str;
+    label.width = scratch.w;
+    label.lit = [];
+    for (let i = 0; i < scratch.px.length; i++) {
+      if (scratch.px[i] === "w") label.lit.push(Math.floor(i / scratch.w) * W + (i % scratch.w));
+    }
+  }
+  return W - label.width - 4;
+}
+
+function paintLabel(cv, corner) {
+  const origin = 10 * W + corner + 2;
+  for (let i = 0; i < label.lit.length; i++) cv.px[origin + label.lit[i]] = "w";
+}
+
+function paintTimeline(cv, show, texts) {
   const hours = show.hours;
   const series = show.series;
   // A tick at every hour mark in the window; midnight stands out.
@@ -88,10 +118,12 @@ function paintTimeline(cv, show) {
 
   sampleColumns(series, show.now, hours, picture.columns);
   picture.anyRain = false;
+  const corner = show.labelled ? labelFrom(texts.window(show.window)) : W;
   const px = cv.px;
   for (let c = 0; c < W; c++) {
     const level = picture.columns[c];
-    const rows = c < knownColumns ? REACH[level] : 0;
+    let rows = c < knownColumns ? REACH[level] : 0;
+    if (c >= corner && rows > ABOVE_LABEL) rows = ABOVE_LABEL;
     picture.reach[c] = rows;
     if (!rows) continue;
     picture.anyRain = true;
@@ -104,6 +136,9 @@ function paintTimeline(cv, show) {
     }
   }
   set(cv, 0, 0, "w");
+
+  if (show.labelled) paintLabel(cv, corner);
+  else if (!picture.anyRain && picture.complete) centred(cv, 6, texts.dryWindow(show.window), "k");
 }
 
 function centred(cv, y, str, color) {
@@ -112,9 +147,11 @@ function centred(cv, y, str, color) {
 
 /** Rain hangs down from the time axis, from now at the left to `show.hours` later at the right. */
 function drawTimeline(cv, show, texts) {
-  // The picture stays as it is until now has moved on by a column, the data changed or the window did.
+  // The picture stays as it is until now has moved on by a column, the data changed, the window did or its
+  // name came or went.
   const column = Math.floor(show.now / ((show.hours * 3600000) / W));
-  startFrom(cv, "timeline" + show.version + "|" + show.hours.toFixed(2) + "|" + column, (bg) => paintTimeline(bg, show));
+  const name = "timeline" + show.version + "|" + show.hours.toFixed(2) + "|" + column + "|" + show.labelled + "|" + show.language;
+  startFrom(cv, name, (bg) => paintTimeline(bg, show, texts));
 
   // The rain shimmers: a few pixels in the bars go out or light up on every frame.
   for (let k = 0; k < 5; k++) {
@@ -122,15 +159,6 @@ function drawTimeline(cv, show, texts) {
     if (!picture.reach[c]) continue;
     const at = (1 + Math.floor(rnd(show.frame * 11 + k * 3) * picture.reach[c])) * W + c;
     cv.px[at] = cv.px[at] === "n" ? "r" : "n";
-  }
-
-  if (show.labelled) {
-    const label = texts.window(show.window);
-    const width = textWidth(label);
-    rect(cv, W - width - 4, 8, width + 4, H - 8, ".");
-    text(cv, W - width - 2, 10, label, "w");
-  } else if (!picture.anyRain && picture.complete) {
-    centred(cv, 6, texts.dryWindow(show.window), "k");
   }
 }
 
