@@ -46,6 +46,7 @@ Everything keeps rain as a whole number from 0 to 255 on a logarithmic scale: 0 
 
 - The relay is its own project, busybar-buitje-relay: a Cloudflare Worker that reads KNMI's radar files, which need an API key and are far too large for the bar. Its answer is `{ run, step, rain }`: 25 values of mm an hour, 5 minutes apart, the first measured in the 5 minutes before `run`. `rain` is null where the radar has no data; the app then leaves it alone for 6 hours. Change the answer's shape in both projects together.
 - **For as long as it reaches, the radar is what is shown**, also where it says dry and a model says rain. It is not joined with the models the way they are with each other: the radar sees the showers there are.
+- **The radar's least count on its own is a speck.** 0.12 mm an hour with dry before and after is drawn faintly and is not rain to the headline or the alert (`parseNowcast`): one place in six with any rain in its 2 hours has nothing but these.
 - **A nowcast older than 20 minutes is not shown** (`NOWCAST_KEEP_MS`): its showers have moved on. The series is then made of the models alone.
 
 For both:

@@ -144,6 +144,14 @@ test("the relay's answer is rain by the 5 minutes, nothing where the radar has n
   }
 });
 
+test("the radar's least count on its own is a speck: shown faintly, not rain to speak of", () => {
+  // As the radar had it for Borne on 18 November: specks now and in 20 minutes, a shower later.
+  const radar = parseNowcast({ run: 600, step: 300, rain: [0.12, 0, 0, 0, 0.12, 0, 0.12, 0.12, 0, 0.84, 1.32, 0.12, 0] });
+  const speck = WET - 1;
+  assert.deepEqual(radar.levels, [speck, 0, 0, 0, speck, 0, levelOf(0.12), levelOf(0.12), 0, levelOf(0.84), levelOf(1.32), levelOf(0.12), 0]);
+  assert.ok(levelOf(0.12) >= WET, "two in a row, or one at the edge of a shower, are drizzle");
+});
+
 test("the radar is asked only for places its picture covers", () => {
   for (const [name, lat, lon, inside] of [["Utrecht", 52.09, 5.12, true], ["Brussels", 50.85, 4.35, true], ["Borne", 52.3, 6.75, true], ["Madrid", 40.42, -3.7, false], ["Berlin", 52.52, 13.4, false], ["Oslo", 59.91, 10.75, false], ["Dublin", 53.35, -6.26, false]]) {
     assert.equal(inRadarReach({ lat, lon }), inside, name);

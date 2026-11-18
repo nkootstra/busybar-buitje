@@ -1,7 +1,7 @@
 // Where the rain comes from: KNMI's rain radar for the first 2 hours where it reaches, and weather models,
 // through Open-Meteo, for everything else. Everything about the two services is here: their addresses, what
 // their answers look like, how those become levels (see rain.js), and the credit the data asks for.
-import { HOURS, levelOf } from "./rain.js";
+import { HOURS, WET, levelOf } from "./rain.js";
 
 /**
  * The radar nowcast: where the showers the radar sees now will be in the next 2 hours, for one square
@@ -11,6 +11,13 @@ import { HOURS, levelOf } from "./rain.js";
 const NOWCAST = "http://buitje.kootstra.io/v1/rain";
 /** What the radar's picture covers: the Netherlands, Belgium and a strip around them. Elsewhere it is not asked. */
 const RADAR = { south: 48.9, north: 55.97, west: 0, east: 10.85 };
+/**
+ * The least the radar can count is 0.12 mm an hour, and on its own, with dry before and after, it is as often
+ * a speck as a drop: one place in six with any rain in its 2 hours has nothing but these. Such a value is
+ * shown, faintly, but is not rain to speak of or to sound an alert for.
+ */
+const SPECK_BELOW = 0.2;
+const SPECK_LEVEL = WET - 1;
 
 /** Open-Meteo's forecast for one spot. Plain HTTP: the bar takes 1.5 s for a TLS handshake. */
 const FORECAST = "http://api.open-meteo.com/v1/forecast";
@@ -121,10 +128,12 @@ export function parseNowcast(json) {
   if (!json || !(json.run > 0) || !(json.step > 0)) return undefined;
   if (json.rain === null) return null;
   if (!json.rain || !json.rain.length) return undefined;
+  const rain = json.rain;
   const levels = [];
-  for (let i = 0; i < json.rain.length; i++) {
-    if (typeof json.rain[i] !== "number") return undefined;
-    levels.push(levelOf(json.rain[i]));
+  for (let i = 0; i < rain.length; i++) {
+    if (typeof rain[i] !== "number") return undefined;
+    const alone = !(rain[i - 1] > 0) && !(rain[i + 1] > 0);
+    levels.push(alone && rain[i] > 0 && rain[i] < SPECK_BELOW ? SPECK_LEVEL : levelOf(rain[i]));
   }
   return { firstEnds: json.run * 1000, span: json.step * 1000, levels };
 }
