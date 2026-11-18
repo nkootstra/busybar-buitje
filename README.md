@@ -55,8 +55,10 @@ The app finds out by itself which of these it is in: it asks the radar, and uses
 
 ## Where the rain comes from
 
-- The next 2 hours, in steps of 5 minutes: Buienradar's radar nowcast.
+- The next 2 hours, in steps of 5 minutes: the radar nowcast of [Buienradar](https://www.buienradar.nl).
 - The 2 days after, and everything where there is no radar: weather models through [Open-Meteo](https://open-meteo.com), KNMI's HARMONIE where it reaches.
+
+Buienradar's data is free for non-commercial use with its source named; KNMI's and Open-Meteo's are under CC BY 4.0. The back display names the sources in use.
 
 The bar needs Wi-Fi. Without it the app says so and waits; when the connection drops it keeps showing what it had, marked as old and with the time it is from, for up to 3 hours.
 
