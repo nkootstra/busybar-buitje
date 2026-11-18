@@ -6,15 +6,15 @@ The rain ahead for your spot. On the front display rain hangs down from a time a
 
 The next 2 hours, the next 48, and the headline in words:
 
-![Rain for the next hour, then a dry spell](docs/screenshots/front-1.png)
+![Rain for the next hour, then a dry spell](docs/screenshots/front-1-leds.png)
 
-![Two days of showers](docs/screenshots/front-3.png)
+![Two days of showers](docs/screenshots/front-3-leds.png)
 
-![RAIN, 65 MIN](docs/screenshots/front-4.png)
+![RAIN, 65 MIN](docs/screenshots/front-4-leds.png)
 
 The back display:
 
-![The headline as a sentence, the place, the 48 hours as a strip, and the sources](docs/screenshots/back-3.png)
+![The headline as a sentence, the place, the 48 hours as a strip, and the sources](docs/screenshots/back-3-large.png)
 
 The pictures are BUSY Bar Emulator's screenshots, taken with live rain for Utrecht. The front display's are drawn here as the LEDs they are on the bar; `screenshots/` has them as they were taken, at the displays' size, 72x16 and 160x80.
 

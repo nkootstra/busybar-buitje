@@ -74,7 +74,9 @@ function enlarged({ width, height, rgba }, scale) {
 mkdirSync(to, { recursive: true });
 for (const name of readdirSync(from).filter((file) => file.endsWith(".png"))) {
   const picture = decodePng(readFileSync(resolve(from, name)));
-  if (name.startsWith("front-")) writeFileSync(resolve(to, name), leds(picture));
-  else if (name.startsWith("back-")) writeFileSync(resolve(to, name), enlarged(picture, BACK_SCALE));
+  // Names of their own: a viewer that kept the screenshot of the same name would go on showing that.
+  const base = name.replace(/\.png$/, "");
+  if (name.startsWith("front-")) writeFileSync(resolve(to, base + "-leds.png"), leds(picture));
+  else if (name.startsWith("back-")) writeFileSync(resolve(to, base + "-large.png"), enlarged(picture, BACK_SCALE));
 }
 console.log("wrote " + to);
