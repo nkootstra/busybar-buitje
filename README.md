@@ -16,7 +16,7 @@ The back display:
 
 ![The headline as a sentence, the place, the 48 hours as a strip, and the sources](docs/screenshots/back-3-large.png)
 
-The pictures are BUSY Bar Emulator's screenshots, taken with live rain for Utrecht. The front display's are drawn here as the LEDs they are on the bar; `screenshots/` has them as they were taken, at the displays' size, 72x16 and 160x80.
+The pictures are BUSY Bar Emulator's screenshots, taken with live rain over Nijmegen on 18 November 2026. The front display's are drawn here as the LEDs they are on the bar; `screenshots/` has them as they were taken, at the displays' size, 72x16 and 160x80.
 
 ## Using it
 
