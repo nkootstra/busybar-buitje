@@ -55,7 +55,7 @@ The app finds out by itself which of these it is in. The last line of the back d
 
 ## Where the rain comes from
 
-- **The radar:** KNMI's precipitation nowcast, which follows the showers the Dutch radars see now for the next 2 hours. KNMI publishes it as a picture of the whole country; a small relay made for this app, at `buitje.kootstra.io`, reads those and answers a bar with the numbers for its place. It is sent the place's coordinates, rounded to a kilometre, and nothing else.
+- **The radar:** KNMI's precipitation nowcast, which follows the showers the Dutch radars see now for the next 2 hours. KNMI publishes it as a picture of the whole country; a small relay made for this app, at `buitje.kootstra.io`, reads those and answers a bar with the numbers for its place. It is sent the place's coordinates, rounded to a kilometre, and nothing else; [PRIVACY.md](PRIVACY.md) has the whole of what the app sends and to whom.
 - **The models,** through [Open-Meteo](https://open-meteo.com): KNMI's HARMONIE by the hour where it reaches (2 km in the Netherlands and Belgium, 5.5 km in central and northern Europe) and other models elsewhere, and DWD's ICON-D2 by the quarter of an hour for the first 6 hours.
 
 Where the radar reaches, the first 2 hours are the radar's, also when it says dry and a model says rain: the radar sees the showers there are. Where the two models disagree, the app shows the stronger rain of the two: rain that is shown and does not come costs less than rain that comes unannounced.
