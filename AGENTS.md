@@ -42,9 +42,10 @@ Everything keeps rain as a whole number from 0 to 255 on a logarithmic scale: 0 
 - **The answer says which it is.** Where both models reach, every value is named after its model (`precipitation_icon_d2`). Where only one does, the values are plain `precipitation`: that model's hours, also under the quarters, which are then not taken.
 - **Where the two models disagree, a step shows the stronger rain of the two** (`buildSeries` in `rain.js`). On 18 November 2026 KNMI had drizzle over Borne for two hours where ICON-D2 had none, and the app, which then let the quarters win, called it dry.
 
-**The radar's nowcast**, one request to the app's own relay over plain HTTP, every 5 minutes, only for a place inside the radar's picture (`inRadarReach`):
+**The radar's nowcast**, one request to the app's own relay at `https://buitje.kootstra.io`, every 5 minutes, only for a place inside the radar's picture (`inRadarReach`):
 
-- The relay is its own project, busybar-buitje-relay: a Cloudflare Worker that reads KNMI's radar files, which need an API key and are far too large for the bar. Its answer is `{ run, step, rain }`: 25 values of mm an hour, 5 minutes apart, the first measured in the 5 minutes before `run`. `rain` is null where the radar has no data; the app then leaves it alone for 6 hours. Change the answer's shape in both projects together.
+- HTTPS, at the cost of the bar's 1.5 s handshake: plain HTTP is answered there with a redirect, and the bar follows none.
+- The relay is its own project, busybar-buitje-relay (a private repository): a Cloudflare Worker that reads KNMI's radar files, which need an API key and are far too large for the bar. Its answer is `{ run, step, rain }`: 25 values of mm an hour, 5 minutes apart, the first measured in the 5 minutes before `run`. `rain` is null where the radar has no data; the app then leaves it alone for 6 hours. Change the answer's shape in both projects together.
 - **For as long as it reaches, the radar is what is shown**, also where it says dry and a model says rain. It is not joined with the models the way they are with each other: the radar sees the showers there are.
 - **The radar's least count on its own is a speck.** 0.12 mm an hour with dry before and after is drawn faintly and is not rain to the headline or the alert (`parseNowcast`): one place in six with any rain in its 2 hours has nothing but these.
 - **A nowcast older than 20 minutes is not shown** (`NOWCAST_KEEP_MS`): its showers have moved on. The series is then made of the models alone.

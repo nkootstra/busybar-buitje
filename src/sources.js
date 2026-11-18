@@ -6,9 +6,10 @@ import { HOURS, WET, levelOf } from "./rain.js";
 /**
  * The radar nowcast: where the showers the radar sees now will be in the next 2 hours, for one square
  * kilometre. KNMI publishes it as a picture of the whole country every 5 minutes; a relay made for this app
- * (github.com/nkootstra/busybar-buitje-relay) reads those and answers with the numbers for one place.
+ * reads those and answers with the numbers for one place. Over HTTPS, at the cost of a handshake: plain HTTP
+ * is answered there with a redirect, and the bar follows none.
  */
-const NOWCAST = "http://buitje.kootstra.io/v1/rain";
+const NOWCAST = "https://buitje.kootstra.io/v1/rain";
 /** What the radar's picture covers: the Netherlands, Belgium and a strip around them. Elsewhere it is not asked. */
 const RADAR = { south: 48.9, north: 55.97, west: 0, east: 10.85 };
 /**
