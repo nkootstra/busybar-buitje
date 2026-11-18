@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { HEAVY, RAIN, STEPS, STEP_MS, WET, buildSeries, levelOf, sampleColumns } from "../src/rain.js";
-import { inRadarReach, parseForecast, parseNowcast } from "../src/sources.js";
+import { inRadarReach, parseDirectNowcast, parseForecast, parseNowcast } from "../src/sources.js";
 import { AT, EVENING, forecast, nowcast, of } from "./forecast.mjs";
 
 const fixture = (name) => JSON.parse(readFileSync(new URL("./fixtures/" + name, import.meta.url), "utf8"));
@@ -150,6 +150,22 @@ test("the radar's least count on its own is a speck: shown faintly, not rain to 
   const speck = WET - 1;
   assert.deepEqual(radar.levels, [speck, 0, 0, 0, speck, 0, levelOf(0.12), levelOf(0.12), 0, levelOf(0.84), levelOf(1.32), levelOf(0.12), 0]);
   assert.ok(levelOf(0.12) >= WET, "two in a row, or one at the edge of a shower, are drizzle");
+});
+
+test("KNMI's own answer is read for the moments that were asked, each standing for the 10 minutes around it", () => {
+  const minute = 60000;
+  const moments = [0, 10, 20, 30, 40].map((m) => Date.UTC(2026, 10, 18, 12, m));
+  // As the service answered for Hamburg on 18 November: the first moment asked was before the run's start.
+  const answer = [{ data: { "2026-11-18T12:05:00Z": { "2026-11-18T12:10:00Z": "0.000000", "2026-11-18T12:20:00Z": "0.360000", "2026-11-18T12:30:00Z": "2.640000", "2026-11-18T12:40:00Z": "0.120000" } } }];
+  assert.deepEqual(parseDirectNowcast(answer, moments), {
+    firstEnds: moments[1] + 5 * minute,
+    span: 10 * minute,
+    levels: [0, levelOf(0.36), levelOf(2.64), levelOf(0.12)],
+  });
+  assert.equal(parseDirectNowcast([{ data: {} }], moments), null, "outside the radar's picture");
+  for (const odd of [null, "", {}, [], [{}], [{ data: "none" }], [{ data: { run: {} } }], [{ data: { run: { "2026-11-18T12:10:00Z": "nodata" } } }], { error: "Quota exceeded" }]) {
+    assert.equal(parseDirectNowcast(odd, moments), undefined, JSON.stringify(odd));
+  }
 });
 
 test("the radar is asked only for places its picture covers", () => {

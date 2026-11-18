@@ -12,6 +12,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const API = "http://localhost/api/";
 const FORECAST = "http://api.open-meteo.com/";
 const NOWCAST = "/v1/rain?";
+const DIRECT = "https://anonymous.api.dataplatform.knmi.nl/";
 /** What the radar's relay answers for a place the radar has no data for. */
 export const NO_RADAR = { run: 1, step: 300, rain: null };
 const flush = () => new Promise((done) => setImmediate(done));
@@ -54,6 +55,8 @@ export function xpmRows(data) {
  *   some other text, an HTTP status, or null for a request that fails.
  * @param {object | string | number | null} [options.nowcast] - what the radar's relay answers, in the same
  *   way; that the radar has no data for the place unless given.
+ * @param {object | string | number | null | Function} [options.direct] - what KNMI's own map service answers,
+ *   in the same way, or a function of the address asked that gives it; a request that fails unless given.
  */
 export async function launch(code, options = {}) {
   const { at = Date.UTC(2026, 10, 17, 20, 14), offsetMin = 60, settings = {} } = options;
@@ -72,6 +75,8 @@ export async function launch(code, options = {}) {
     /** The addresses the app asked the forecast service, and the radar's relay, in order. */
     requests: [],
     radarRequests: [],
+    /** The addresses the app asked KNMI's own map service, its second way to the radar. */
+    directRequests: [],
     /** How many draw requests reached the display. */
     draws: 0,
     settings: { ...settings },
@@ -81,6 +86,8 @@ export async function launch(code, options = {}) {
     forecast: options.forecast === undefined ? null : options.forecast,
     /** What the radar's relay answers; a test may change it while the app runs. */
     nowcast: options.nowcast === undefined ? NO_RADAR : options.nowcast,
+    /** What KNMI's own map service answers; a request that fails unless given. A test may change it. */
+    direct: options.direct === undefined ? null : options.direct,
     /** Calls of the bar's own API that answer 500, by the start of their path; a test may change them. */
     broken: options.broken || [],
     handler: null,
@@ -161,6 +168,10 @@ export async function launch(code, options = {}) {
     if (url.startsWith(FORECAST)) {
       bar.requests.push(url);
       return answer(bar.forecast);
+    }
+    if (url.startsWith(DIRECT)) {
+      bar.directRequests.push(url);
+      return answer(typeof bar.direct === "function" ? bar.direct(url) : bar.direct);
     }
     if (url.indexOf(NOWCAST) > 0) {
       bar.radarRequests.push(url);

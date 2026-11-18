@@ -10,6 +10,19 @@ import { HOURS, WET, levelOf } from "./rain.js";
  * is answered there with a redirect, and the bar follows none.
  */
 const NOWCAST = "https://buitje.kootstra.io/v1/rain";
+/**
+ * The same nowcast straight from KNMI, for when the relay does not answer: its map service, which anyone may
+ * ask without a key. It is the lesser way: its quota of 1000 requests an hour is shared by everyone who uses
+ * it, and it answers right only for moments 10 minutes apart of a run that is named ("current" is the newest),
+ * so it gives half the detail.
+ */
+const NOWCAST_DIRECT =
+  "https://anonymous.api.dataplatform.knmi.nl/wms/adaguc-server?DATASET=radar_forecast_2.0a&SERVICE=WMS&VERSION=1.1.1" +
+  "&request=GetFeatureInfo&LAYERS=precipitation_nowcast&QUERY_LAYERS=precipitation_nowcast&INFO_FORMAT=application/json" +
+  "&SRS=EPSG:4326&WIDTH=3&HEIGHT=3&X=1&Y=1&DIM_REFERENCE_TIME=current";
+const DIRECT_STEP_MS = 10 * 60000;
+/** The moments asked for: 2 hours of them. */
+const DIRECT_STEPS = 12;
 /** What the radar's picture covers: the Netherlands, Belgium and a strip around them. Elsewhere it is not asked. */
 const RADAR = { south: 48.9, north: 55.97, west: 0, east: 10.85 };
 /**
@@ -130,13 +143,59 @@ export function parseNowcast(json) {
   if (json.rain === null) return null;
   if (!json.rain || !json.rain.length) return undefined;
   const rain = json.rain;
+  for (let i = 0; i < rain.length; i++) if (typeof rain[i] !== "number") return undefined;
+  return { firstEnds: json.run * 1000, span: json.step * 1000, levels: radarLevels(rain) };
+}
+
+/** The radar's mm an hour as levels, with a least count on its own made a speck. */
+function radarLevels(rain) {
   const levels = [];
   for (let i = 0; i < rain.length; i++) {
-    if (typeof rain[i] !== "number") return undefined;
     const alone = !(rain[i - 1] > 0) && !(rain[i + 1] > 0);
     levels.push(alone && rain[i] > 0 && rain[i] < SPECK_BELOW ? SPECK_LEVEL : levelOf(rain[i]));
   }
-  return { firstEnds: json.run * 1000, span: json.step * 1000, levels };
+  return levels;
+}
+
+const two = (n) => (n < 10 ? "0" : "") + n;
+
+/** A moment as KNMI's map service names it: 2026-11-18T12:10:00Z. */
+function stampOf(ms) {
+  const d = new Date(ms);
+  return d.getUTCFullYear() + "-" + two(d.getUTCMonth() + 1) + "-" + two(d.getUTCDate()) + "T" + two(d.getUTCHours()) + ":" + two(d.getUTCMinutes()) + ":00Z";
+}
+
+/** The moments to ask the map service for at `now`: every 10 minutes from the one `now` is in. */
+function directMoments(now) {
+  const first = Math.floor(now / DIRECT_STEP_MS) * DIRECT_STEP_MS;
+  const moments = [];
+  for (let i = 0; i <= DIRECT_STEPS; i++) moments.push(first + i * DIRECT_STEP_MS);
+  return moments;
+}
+
+/**
+ * Reads the map service's answer for the `moments` that were asked: [{ data: { <run>: { <moment>: "0.12" } } }],
+ * mm an hour as text, each the rate at its moment. A moment before the run's start is left out of the answer.
+ * Returns a block as buildSeries takes it, each value standing for the 10 minutes around its moment; null
+ * where the radar has no data; undefined when the answer is not one.
+ */
+export function parseDirectNowcast(json, moments) {
+  const data = json && json[0] && json[0].data;
+  if (!data || typeof data !== "object") return undefined;
+  let values = null;
+  for (const run in data) values = data[run];
+  if (!values) return null;
+  const rain = [];
+  let first = 0;
+  for (let i = 0; i < moments.length; i++) {
+    const value = parseFloat(values[stampOf(moments[i])]);
+    if (value >= 0) {
+      if (!rain.length) first = moments[i];
+      rain.push(value);
+    } else if (rain.length) break;
+  }
+  if (!rain.length) return undefined;
+  return { firstEnds: first + DIRECT_STEP_MS / 2, span: DIRECT_STEP_MS, levels: radarLevels(rain) };
 }
 
 /**
@@ -149,6 +208,26 @@ export function loadNowcast(place) {
     return res.json().then((json) => {
       const nowcast = parseNowcast(json);
       if (nowcast === undefined) throw new Error("nowcast: none in the answer");
+      return nowcast;
+    });
+  });
+}
+
+/**
+ * The radar nowcast for a place straight from KNMI's map service, at moment `now` in ms. Resolves and rejects
+ * as loadNowcast does.
+ */
+export function loadNowcastDirect(place, now) {
+  const moments = directMoments(now);
+  const lat = Math.round(place.lat * 100) / 100;
+  const lon = Math.round(place.lon * 100) / 100;
+  // The service answers for the middle of a small map around the place.
+  const box = [lon - 0.01, lat - 0.01, lon + 0.01, lat + 0.01].map((edge) => edge.toFixed(2)).join(",");
+  return fetch(NOWCAST_DIRECT + "&BBOX=" + box + "&TIME=" + moments.map(stampOf).join(",")).then((res) => {
+    if (!res.ok) throw new Error("nowcast, direct: HTTP " + res.status);
+    return res.json().then((json) => {
+      const nowcast = parseDirectNowcast(json, moments);
+      if (nowcast === undefined) throw new Error("nowcast, direct: none in the answer");
       return nowcast;
     });
   });

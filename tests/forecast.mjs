@@ -60,3 +60,17 @@ export function nowcast(rain = [], at = AT) {
   const run = Math.floor(at / 300000) * 300;
   return { run, step: 300, rain: [0].concat(rain, of(24, 0)).slice(0, 25) };
 }
+
+/**
+ * KNMI's own map service, as the pretend bar's `direct`: answers the moments an address asks for, 10 minutes
+ * apart, with `rain` in mm an hour for each in turn and dry after that. The first moment asked is before the
+ * newest run's start, so it is left out, as the service does.
+ */
+export function directNowcast(rain = []) {
+  return (url) => {
+    const moments = decodeURIComponent(url.split("&TIME=")[1].split("&")[0]).split(",");
+    const values = {};
+    moments.slice(1).forEach((moment, i) => (values[moment] = (rain[i] || 0).toFixed(6)));
+    return [{ name: "precipitation_nowcast", units: "mm/hr", dims: ["reference_time", "time"], data: { [moments[0].slice(0, 15) + "5:00Z"]: values } }];
+  };
+}

@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { before, test } from "node:test";
 import { builtApp, launch } from "../tools/sim.mjs";
-import { AT, DRY, EVENING, forecast, nowcast, of } from "./forecast.mjs";
+import { AT, DRY, EVENING, directNowcast, forecast, nowcast, of } from "./forecast.mjs";
 
 /** The bar at 21:14 on the evening most tests share: dry, drizzle from 21:45, rain from 23:00. */
 const evening = (more = {}) => ({ at: AT, forecast: EVENING, ...more });
@@ -307,6 +307,43 @@ test("when the radar fails the app shows the models, and does not call its data 
   bar.nowcast = nowcast([], bar.now);
   await bar.advance(6 * 60000);
   assert.equal(bar.text("source"), "KNMI radar + DWD via Open-Meteo");
+});
+
+test("when the relay does not answer, the radar is asked of KNMI itself", async () => {
+  // KNMI has a shower from 21:30 to 21:50; the relay is down.
+  const bar = await launch(app, evening({ nowcast: 503, direct: directNowcast([0, 3, 3]) }));
+  await bar.advance(2000);
+  assert.equal(bar.radarRequests.length, 1);
+  assert.equal(bar.directRequests.length, 1);
+  assert.match(bar.directRequests[0], /^https:\/\/anonymous\.api\.dataplatform\.knmi\.nl\/wms\/.*DIM_REFERENCE_TIME=current&BBOX=5\.11,52\.08,5\.13,52\.10&TIME=2026-11-17T20:10:00Z,2026-11-17T20:20:00Z,/);
+  assert.equal(bar.text("source"), "KNMI radar + DWD via Open-Meteo");
+  assert.equal(bar.text("head1"), "Rain in 10 minutes", "the 10 minutes around 21:30 start at 21:25");
+  assert.deepEqual(bar.errors.length, 1, "the relay's failure is reported");
+});
+
+test("KNMI itself is asked at most every 10 minutes, and not at all while the relay answers", async () => {
+  const bar = await launch(app, evening({ nowcast: SHOWER, direct: directNowcast([0, 3, 3]) }));
+  await bar.advance(31 * 60000);
+  assert.equal(bar.directRequests.length, 0);
+  bar.nowcast = null;
+  await bar.advance(30 * 60000);
+  assert.equal(bar.radarRequests.length, 13, "the relay stays the first to be asked, every 5 minutes");
+  assert.equal(bar.directRequests.length, 3);
+  assert.equal(bar.text("source"), "KNMI radar + DWD via Open-Meteo");
+  // The relay is back: KNMI is left alone again.
+  bar.nowcast = nowcast([], bar.now);
+  await bar.advance(20 * 60000);
+  assert.equal(bar.directRequests.length, 3);
+});
+
+test("when neither way to the radar answers, the models are shown and nothing is called old", async () => {
+  for (const direct of [null, 403, { error: "Quota exceeded" }, "<html>502</html>", [{ data: {} }]]) {
+    const bar = await launch(app, evening({ nowcast: 500, direct }));
+    await bar.advance(40 * 60000);
+    assert.equal(bar.text("source"), "KNMI + DWD via Open-Meteo", JSON.stringify(direct));
+    assert.notEqual(bar.front[15][71], "e");
+    assert.equal(bar.alive, true);
+  }
 });
 
 test("when the forecast fails the radar alone does not keep the data fresh", async () => {

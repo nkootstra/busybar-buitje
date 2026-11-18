@@ -2,12 +2,17 @@
 // fails, and the series made of their latest answers.
 import { loadWifi } from "./bar.js";
 import { NOWCAST_KEEP_MS, STEP_MS, buildSeries } from "./rain.js";
-import { inRadarReach, loadForecast, loadNowcast } from "./sources.js";
+import { inRadarReach, loadForecast, loadNowcast, loadNowcastDirect } from "./sources.js";
 
 /** How often the forecast is asked for: its finest values are a quarter of an hour apart. */
 const FORECAST_MS = 15 * 60000;
 /** How often the radar's nowcast is asked for: a new one comes every 5 minutes. */
 const NOWCAST_MS = 5 * 60000;
+/**
+ * When the relay does not answer, KNMI itself is asked, but no more often than this: what it gives is 10
+ * minutes apart, and its quota is shared by everyone who asks it.
+ */
+const DIRECT_MS = 10 * 60000;
 /** Where the radar turned out to have no data, it is asked again after this long: its reach does not move. */
 const NO_RADAR_MS = 6 * 60 * 60000;
 /**
@@ -61,6 +66,7 @@ export function createFeed(place, report) {
   let nowcastDue = inRadarReach(place) ? 0 : Infinity;
   let forecastAsked = -Infinity;
   let nowcastAsked = -Infinity;
+  let directAsked = -Infinity;
   /** How many times in a row asking for the forecast has failed. */
   let failures = 0;
   /** Whether the bar's Wi-Fi was down when last looked at, and whether a look or a request is under way. */
@@ -155,20 +161,33 @@ export function createFeed(place, report) {
 
   function askNowcast() {
     nowcastAsked = Date.now();
-    return loadNowcast(place).then(
-      (answer) => {
-        const now = Date.now();
-        nowcast = answer;
-        nowcastDue = now + (answer ? NOWCAST_MS : NO_RADAR_MS);
-        // Without a forecast there is no series yet; it takes the nowcast in when it comes.
-        if (answer && forecast && feed.series) put(buildSeries(now, forecast, nowcast));
-      },
-      // The app does without: the series stays as it is until the radar's part of it has grown old.
-      (err) => {
+    return loadNowcast(place)
+      .catch((err) => {
         report(err);
-        nowcastDue = Date.now() + NOWCAST_MS;
-      },
-    );
+        // The relay does not answer: KNMI itself, when it was not asked just now and the app is still wanted.
+        const now = Date.now();
+        if (stopped || now - directAsked < DIRECT_MS) throw err;
+        directAsked = now;
+        // That KNMI has nothing for the place is not taken from this way: the relay is asked again as usual.
+        return loadNowcastDirect(place, now).then((answer) => {
+          if (!answer) throw err;
+          return answer;
+        });
+      })
+      .then(
+        (answer) => {
+          const now = Date.now();
+          nowcast = answer;
+          nowcastDue = now + (answer ? NOWCAST_MS : NO_RADAR_MS);
+          // Without a forecast there is no series yet; it takes the nowcast in when it comes.
+          if (answer && forecast && feed.series) put(buildSeries(now, forecast, nowcast));
+        },
+        // The app does without: the series stays as it is until the radar's part of it has grown old.
+        (err) => {
+          report(err);
+          nowcastDue = Date.now() + NOWCAST_MS;
+        },
+      );
   }
 
   return feed;

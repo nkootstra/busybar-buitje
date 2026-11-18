@@ -60,7 +60,7 @@ The app finds out by itself which of these it is in. The last line of the back d
 
 Where the radar reaches, the first 2 hours are the radar's, also when it says dry and a model says rain: the radar sees the showers there are. Where the two models disagree, the app shows the stronger rain of the two: rain that is shown and does not come costs less than rain that comes unannounced.
 
-When the relay does not answer, the app shows the models and says nothing: they are a forecast, so a shower can then come earlier or later than shown, and a small one can be missed. That goes for the rain alert too. All of the data is under CC BY 4.0.
+When the relay does not answer, the app asks KNMI's own map service for the same radar, which gives it in steps of 10 minutes. When that does not answer either, the app shows the models and says nothing: they are a forecast, so a shower can then come earlier or later than shown, and a small one can be missed. That goes for the rain alert too. All of the data is under CC BY 4.0.
 
 The bar needs Wi-Fi. Without it the app says so and waits; when the connection drops it keeps showing what it had, marked as old and with the time it is from, for up to 3 hours.
 
