@@ -16,7 +16,7 @@ The back display:
 
 ![The headline as a sentence, the place, the 48 hours as a strip, and the sources](docs/screenshots/back-3.png)
 
-The pictures are the bar's own, from BUSY Bar Emulator with live rain for Utrecht, enlarged; `screenshots/` has them at the displays' size, 72x16 and 160x80.
+The pictures are BUSY Bar Emulator's screenshots, taken with live rain for Utrecht. The front display's are drawn here as the LEDs they are on the bar; `screenshots/` has them as they were taken, at the displays' size, 72x16 and 160x80.
 
 ## Using it
 
@@ -41,10 +41,22 @@ The status light blinks blue when rain is about to start.
 
 The app reads its settings when it starts: start it again after a change.
 
+## Where it works
+
+Anywhere, but it is made for the Netherlands and Belgium, and best there.
+
+| Where | What you get |
+|---|---|
+| The Netherlands and Belgium, and a strip across their borders (Luxembourg, Cologne, Lille) | The next 2 hours from the rain radar, in steps of 5 minutes, then KNMI's 2 km weather model for the 2 days after. |
+| The rest of central and northern Europe, up to Iceland | No radar. KNMI's 5.5 km model for all 48 hours: by the quarter for the first 3, then by the hour. |
+| The rest of the world | No radar. Whatever model Open-Meteo has for the place, by the hour. Showers are placed less precisely. |
+
+The app finds out by itself which of these it is in: it asks the radar, and uses the models alone when the radar says the place is out of its reach. The last line of the back display names the sources in use.
+
 ## Where the rain comes from
 
-- The next 2 hours, in steps of 5 minutes: Buienradar's radar nowcast, in the Netherlands and Belgium.
-- The 2 days after: KNMI's HARMONIE model through [Open-Meteo](https://open-meteo.com), which also stands in for the radar elsewhere.
+- The next 2 hours, in steps of 5 minutes: Buienradar's radar nowcast.
+- The 2 days after, and everything where there is no radar: weather models through [Open-Meteo](https://open-meteo.com), KNMI's HARMONIE where it reaches.
 
 The bar needs Wi-Fi. Without it the app says so and waits; when the connection drops it keeps showing what it had, marked as old and with the time it is from, for up to 3 hours.
 

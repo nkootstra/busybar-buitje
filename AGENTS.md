@@ -35,8 +35,8 @@ Everything keeps rain as a whole number from 0 to 255 on the radar feed's own lo
 
 ## The sources
 
-- **Radar:** Buienradar's raintext, 2 hours in 5-minute steps, the Netherlands and Belgium only. It needs HTTPS: the plain address redirects, and the bar follows no redirects. Elsewhere it answers 404, and the app then uses the model's 15-minute values for the first hours.
-- **Model:** Open-Meteo with `models=knmi_seamless`, 48 hours by the hour, over plain HTTP: a TLS handshake takes the bar 1.5 s. An hourly value is the rain of the hour *before* its time.
+- **Radar:** Buienradar's raintext, 2 hours in 5-minute steps, for the Netherlands, Belgium and a strip across their borders (Luxembourg, Cologne and Lille answered on 18 November 2026; London and Copenhagen did not). It needs HTTPS: the plain address redirects, and the bar follows no redirects. Elsewhere it answers 404, and the app then uses the model's 15-minute values for the first hours.
+- **Model:** Open-Meteo with `models=knmi_seamless`, 48 hours by the hour, over plain HTTP: a TLS handshake takes the bar 1.5 s. An hourly value is the rain of the hour *before* its time. It answers for any place in the world: KNMI's HARMONIE at 2 km in the Netherlands and Belgium and at 5.5 km in central and northern Europe, other models elsewhere (Madrid, New York, Tokyo, Sydney and Paramaribo all answered). README.md has the table of what a person gets where: keep it true.
 - The radar's first line can be the step now is in or the next one. Its lines carry clock times without a date: `buildSeries` places them by the minute of the hour, so the bar's own zone does not matter. An answer older than 15 minutes can no longer be placed and is not used.
 - **A series knows how far it reaches** (`known`). Past that the sources said nothing, which is not the same as dry: the headline speaks only of what is known ("Dry for the next 2 hours" with the radar alone), the timeline's axis ends there, and the back strip is dark past it. Keep it that way in anything that reads a series.
 - Keep the source line on the back display. It is the attribution the data's licences ask for.
@@ -92,3 +92,4 @@ Sending the front display takes the bar about 45 ms of each, whatever the app do
 - `tests/fixtures` holds live answers of both sources, taken on 17 November 2026 at 21:14. The app tests are written for that rain: `sh tools/fetch-fixtures.sh` takes new answers, and the tests then need new expectations.
 - `node tools/render.mjs` writes `previews/screens.png` from the fixtures, with the app's own drawing.
 - `node tools/make-icons.mjs` writes the two icons in `src/appmeta`.
+- `node tools/readme-pictures.mjs` writes `docs/screenshots` from `screenshots/`: the front display's as LEDs, the way the bar looks, and the back's enlarged. Run it after taking new screenshots with `busy-emulator screenshot`. The catalog takes the ones in `screenshots/`, never these.

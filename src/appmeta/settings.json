@@ -5,7 +5,7 @@
     "place": {
       "type": "geolocation",
       "label": "Place",
-      "description": "The spot the rain is shown for. Rain is local: after detecting the place automatically, check that it names your town, and type it yourself if it is off. The radar reaches the Netherlands and Belgium; elsewhere the forecast comes from the weather model alone.",
+      "description": "The spot the rain is shown for. Rain is local: after detecting the place automatically, check that it names your town, and type it yourself if it is off. Most precise in the Netherlands and Belgium, where the rain radar reaches: there it knows the next 2 hours to 5 minutes. Anywhere else in the world the forecast comes from weather models alone.",
       "default": { "mode": "fixed", "name": "Utrecht", "lat": 52.09, "lon": 5.12 }
     },
     "zoom": {

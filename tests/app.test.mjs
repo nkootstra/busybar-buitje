@@ -331,7 +331,7 @@ test("Start asks for fresh data", async () => {
 test("outside the radar's reach the weather model stands in", async () => {
   const place = { mode: "fixed", name: "Berlin", lat: 52.52, lon: 13.4 };
   const bar = await launch(app, live({ radar: 404, settings: { place } }));
-  assert.equal(bar.text("source"), "KNMI via Open-Meteo");
+  assert.equal(bar.text("source"), "Open-Meteo (KNMI, ECMWF)");
   assert.match(bar.requests[bar.requests.length - 1], /minutely_15=precipitation/);
   assert.notEqual(bar.text("head1"), null);
   assert.deepEqual(bar.errors, []);

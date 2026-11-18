@@ -4,11 +4,16 @@
 import { HOURS, levelOf } from "./rain.js";
 
 /**
- * Buienradar's nowcast for one spot, the Netherlands and Belgium only. HTTPS, because the plain address answers
- * with a redirect and the bar follows none.
+ * Buienradar's nowcast for one spot: the Netherlands, Belgium and a strip across their borders (Luxembourg,
+ * Cologne and Lille answer; London and Copenhagen do not). HTTPS, because the plain address answers with a
+ * redirect and the bar follows none.
  */
 const RADAR = "https://gpsgadget.buienradar.nl/data/raintext";
-/** Open-Meteo, with KNMI's HARMONIE model where it reaches. Plain HTTP: the bar takes 1.5 s for a TLS handshake. */
+/**
+ * Open-Meteo, anywhere in the world. `knmi_seamless` gives KNMI's HARMONIE model where it reaches (2 km in the
+ * Netherlands and Belgium, 5.5 km in central and northern Europe) and other models elsewhere.
+ * Plain HTTP: the bar takes 1.5 s for a TLS handshake.
+ */
 const MODEL = "http://api.open-meteo.com/v1/forecast";
 
 /** The radar's answer for a place it does not cover. */
@@ -19,9 +24,10 @@ export const NO_RADAR = "no radar";
 
 /**
  * The credit for the data on show, with the radar's and with the model's alone. The data's licences ask for
- * it (KNMI and Open-Meteo: CC BY 4.0): it stays on the back display whatever else is there.
+ * it (KNMI and Open-Meteo: CC BY 4.0): it stays on the back display whatever else is there. Where the radar
+ * reaches the model is KNMI's; without it the app cannot tell whose it is, and names the ones it can be.
  */
-export const CREDIT = { radar: "Buienradar + KNMI via Open-Meteo", model: "KNMI via Open-Meteo" };
+export const CREDIT = { radar: "Buienradar + KNMI via Open-Meteo", model: "Open-Meteo (KNMI, ECMWF)" };
 
 /**
  * Reads the radar nowcast: lines of "077|21:45", a level and a clock time, 5 minutes apart. The levels are
