@@ -3,15 +3,13 @@
 // The wheel sets how far ahead the timeline looks, from 1 hour to 48. OK switches between the timeline and the
 // headline in words, Start asks for fresh data and Back quits.
 //
-// This file is the app's loop and its buttons. One timer paints frames; on each it lets the feed ask for data
+// This file is the app's loop and its buttons. One timer makes frames; on each it lets the feed ask for data
 // that is due, describes what to show, and sends what changed. What the displays look like is in front.js and
-// back.js, where the rain comes from in feed.js and sources.js.
+// back.js, what has to be sent in screen.js, where the rain comes from in feed.js and sources.js.
 import manifest from "./appmeta/manifest.json";
-import { backElements, backKey } from "./back.js";
-import { bitmap, draw, loadSettings, loadZone, playSound } from "./bar.js";
-import { toXpm } from "./canvas.js";
+import { draw, loadSettings, loadZone, playSound } from "./bar.js";
 import { createFeed } from "./feed.js";
-import { createFront, drawFront } from "./front.js";
+import { createScreen } from "./screen.js";
 import { DEFAULTS, readSettings } from "./settings.js";
 import { describe } from "./show.js";
 import { createZoom } from "./zoom.js";
@@ -28,7 +26,7 @@ const ALERT_REST_MS = 60 * 60000;
 const ALERT_SOUND = "shared/sounds/calendar_event_starts.snd";
 const ALERT_LIGHT = "#5B7BFFFF";
 
-const front = createFront();
+const screen = createScreen();
 
 let settings = DEFAULTS;
 let feed = null;
@@ -46,9 +44,6 @@ let startedAt = 0;
 let stopped = false;
 let timer = 0;
 let sending = false;
-/** What the displays show, so that only changes are sent. */
-let shownFront = null;
-let shownBack = null;
 let unbind = null;
 
 function report(err) {
@@ -89,27 +84,8 @@ function watch(show) {
 function frame(now) {
   const show = showAt(now);
   watch(show);
-  const elements = [];
-
-  drawFront(front, show);
-  const xpm = toXpm(front);
-  // The status light blinks with a frame: when one is due and nothing changed, the front goes out again.
-  if (xpm !== shownFront || light) {
-    shownFront = xpm;
-    elements.push(bitmap("front", xpm, 0, 0, "front"));
-  }
-
-  // While the window slides the front comes first: the back display follows when it has settled, once, however
-  // many clicks the wheel made.
-  if (!zoom.sliding(now)) {
-    const key = backKey(show);
-    if (key !== shownBack) {
-      shownBack = key;
-      const back = backElements(show);
-      for (let i = 0; i < back.length; i++) elements.push(back[i]);
-    }
-  }
-  return elements;
+  // The status light blinks with a frame: when it is due and nothing changed, the front goes out again.
+  return screen.changes(show, !zoom.sliding(now), !!light);
 }
 
 /** Sends a frame. One the bar refuses is forgotten, so that the next is sent whole, the light with it. */
@@ -118,10 +94,10 @@ function send(elements) {
   return draw(APP, elements, blink).then(
     (taken) => {
       if (taken && light === blink) light = null;
-      if (!taken) shownFront = shownBack = null;
+      if (!taken) screen.forget();
     },
     (err) => {
-      shownFront = shownBack = null;
+      screen.forget();
       report(err);
     },
   );

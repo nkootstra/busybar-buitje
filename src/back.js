@@ -29,22 +29,33 @@ let outside = [];
 const EDGE = new Array(STRIP_W + 1).join("w");
 const DARK = new Array(STRIP_W + 1).join(".");
 
+/** For every rain level, how far its bar reaches in the strip: looked up, since this is asked for every pixel. */
+const STRIP_REACH = new Uint8Array(256);
+for (let level = 0; level < 256; level++) STRIP_REACH[level] = reachOf(level, STRIP_ROWS);
+
 function paintStrip(series, now) {
   sampleColumns(series, now, HOURS, stripColumns);
   // Past what the forecast knows the strip is left dark, also inside the frame.
   const known = Math.floor(((series.base + series.known * STEP_MS - now) / (HOURS * 3600000)) * STRIP_W);
   inside = [];
   outside = [];
+  // Rain hangs from the top, so a row is the row above it with some bars ended. The top row is made column by
+  // column, noting for each bar the row it ends at; every row after only puts ground where bars end.
+  const row = new Array(STRIP_W);
+  const endsAt = [];
+  for (let y = 0; y <= STRIP_ROWS; y++) endsAt.push([]);
+  for (let x = 0; x < STRIP_W; x++) {
+    const level = stripColumns[x];
+    const reach = x < known ? STRIP_REACH[level] : 0;
+    row[x] = x >= known ? "." : reach ? (level >= HEAVY ? "l" : "K") : "G";
+    if (reach) endsAt[reach].push(x);
+  }
   for (let y = 0; y < STRIP_ROWS; y++) {
-    const lit = [];
-    const dark = [];
-    for (let x = 0; x < STRIP_W; x++) {
-      const rain = x < known && y < reachOf(stripColumns[x], STRIP_ROWS) ? (stripColumns[x] >= HEAVY ? "l" : "K") : "";
-      lit.push(rain || (x < known ? "G" : "."));
-      dark.push(rain || ".");
-    }
-    inside.push(lit.join(""));
-    outside.push(dark.join(""));
+    for (let i = 0; i < endsAt[y].length; i++) row[endsAt[y][i]] = "G";
+    const lit = row.join("");
+    inside.push(lit);
+    // Outside the frame the ground is dark: the same row without its lit ground.
+    outside.push(lit.replace(/G/g, "."));
   }
 }
 

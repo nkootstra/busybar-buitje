@@ -47,17 +47,34 @@ const picture = {
 };
 
 /**
+ * What a frame drew over the picture: for each pixel its place, then what was there. A frame draws straight
+ * onto the picture, which saves the bar copying all of it, and the next frame first puts these back.
+ */
+const drawnOver = [];
+
+/** Draws one pixel of a frame over the picture. */
+function drawOver(cv, at, c) {
+  drawnOver.push(at, cv.px[at]);
+  cv.px[at] = c;
+}
+
+/**
  * Starts a frame on `cv` from the picture named `name`, which `paint(cv)` makes from an empty display when it
- * is not the one on show.
+ * is not the one on show. What the frame adds to it goes through drawOver.
  */
 function startFrom(cv, name, paint) {
+  // Last in, first out: a pixel drawn over twice gets back what it had before the first.
+  while (drawnOver.length) {
+    const was = drawnOver.pop();
+    picture.px[drawnOver.pop()] = was;
+  }
   if (name !== picture.of) {
-    cv.px = EMPTY.slice();
+    picture.px = EMPTY.slice();
+    cv.px = picture.px;
     paint(cv);
-    picture.px = cv.px;
     picture.of = name;
   }
-  cv.px = picture.px.slice();
+  cv.px = picture.px;
 }
 
 /** A canvas the size of the front display. */
@@ -158,7 +175,7 @@ function drawTimeline(cv, show, texts) {
     const c = Math.floor(rnd(show.frame * 5 + k) * W);
     if (!picture.reach[c]) continue;
     const at = (1 + Math.floor(rnd(show.frame * 11 + k * 3) * picture.reach[c])) * W + c;
-    cv.px[at] = cv.px[at] === "n" ? "r" : "n";
+    drawOver(cv, at, cv.px[at] === "n" ? "r" : "n");
   }
 }
 
@@ -195,5 +212,5 @@ export function drawFront(cv, show) {
   }
   if (show.inWords) drawWords(cv, show.words);
   else drawTimeline(cv, show, texts);
-  if (show.stale) set(cv, W - 1, H - 1, "e");
+  if (show.stale) drawOver(cv, W * H - 1, "e");
 }
