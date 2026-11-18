@@ -1,6 +1,16 @@
-// Where the rain comes from: weather models, through Open-Meteo. Everything about the service is here: its
-// address, what its answers look like, how those become levels (see rain.js), and the credit the data asks for.
+// Where the rain comes from: KNMI's rain radar for the first 2 hours where it reaches, and weather models,
+// through Open-Meteo, for everything else. Everything about the two services is here: their addresses, what
+// their answers look like, how those become levels (see rain.js), and the credit the data asks for.
 import { HOURS, levelOf } from "./rain.js";
+
+/**
+ * The radar nowcast: where the showers the radar sees now will be in the next 2 hours, for one square
+ * kilometre. KNMI publishes it as a picture of the whole country every 5 minutes; a relay made for this app
+ * (github.com/nkootstra/busybar-buitje-relay) reads those and answers with the numbers for one place.
+ */
+const NOWCAST = "http://buitje.kootstra.io/v1/rain";
+/** What the radar's picture covers: the Netherlands, Belgium and a strip around them. Elsewhere it is not asked. */
+const RADAR = { south: 48.9, north: 55.97, west: 0, east: 10.85 };
 
 /** Open-Meteo's forecast for one spot. Plain HTTP: the bar takes 1.5 s for a TLS handshake. */
 const FORECAST = "http://api.open-meteo.com/v1/forecast";
@@ -21,12 +31,16 @@ const BY_THE_QUARTER = "icon_d2";
 const QUARTERS = 24;
 
 /**
- * The credit for the data on show, with and without the finer first hours. The data's licences ask for it
- * (Open-Meteo, KNMI and DWD: CC BY 4.0): it stays on the back display whatever else is there. Without the
- * finer model the hours are KNMI's where its model reaches and another's elsewhere, which the answer does not
- * say.
+ * The credit for the data on show, by what a series is made of (its `made`): with the radar, with the finer
+ * model's first hours, or with neither. The data's licences ask for it (Open-Meteo, KNMI and DWD: CC BY 4.0):
+ * it stays on the back display whatever else is there. Without the finer model the hours are KNMI's where its
+ * model reaches and another's elsewhere, which the answer does not say.
  */
-export const CREDIT = { fine: "KNMI + DWD via Open-Meteo", coarse: "KNMI and others via Open-Meteo" };
+export const CREDIT = {
+  radar: "KNMI radar + DWD via Open-Meteo",
+  fine: "KNMI + DWD via Open-Meteo",
+  coarse: "KNMI and others via Open-Meteo",
+};
 
 /**
  * A block of the answer as buildSeries takes it: { firstEnds, span, levels }. Each value is the rain that fell in
@@ -88,6 +102,44 @@ export function loadForecast(place) {
       const forecast = parseForecast(json);
       if (!forecast) throw new Error("forecast: none in the answer");
       return forecast;
+    });
+  });
+}
+
+/** Whether the radar's picture covers a place. Near its edge the relay may still say it has nothing. */
+export function inRadarReach(place) {
+  return place.lat > RADAR.south && place.lat < RADAR.north && place.lon > RADAR.west && place.lon < RADAR.east;
+}
+
+/**
+ * Reads the relay's answer: { run, step, rain }, with `run` the unix time of the first value, `step` the
+ * seconds between values, and `rain` mm an hour for each; `rain` is null where the radar has no data.
+ * Returns a block as buildSeries takes it, null where the radar has no data, and undefined when the answer is
+ * not one.
+ */
+export function parseNowcast(json) {
+  if (!json || !(json.run > 0) || !(json.step > 0)) return undefined;
+  if (json.rain === null) return null;
+  if (!json.rain || !json.rain.length) return undefined;
+  const levels = [];
+  for (let i = 0; i < json.rain.length; i++) {
+    if (typeof json.rain[i] !== "number") return undefined;
+    levels.push(levelOf(json.rain[i]));
+  }
+  return { firstEnds: json.run * 1000, span: json.step * 1000, levels };
+}
+
+/**
+ * The radar nowcast for a place. Resolves to a block, or to null where the radar has no data; rejects when the
+ * request fails or the answer is not one.
+ */
+export function loadNowcast(place) {
+  return fetch(NOWCAST + "?lat=" + coordinate(place.lat) + "&lon=" + coordinate(place.lon)).then((res) => {
+    if (!res.ok) throw new Error("nowcast: HTTP " + res.status);
+    return res.json().then((json) => {
+      const nowcast = parseNowcast(json);
+      if (nowcast === undefined) throw new Error("nowcast: none in the answer");
+      return nowcast;
     });
   });
 }

@@ -20,6 +20,8 @@ export const FAINT = WET - 7;
 
 /** Where the quarters end the series takes an hour to fade from them into the hours. */
 const FADE_STEPS = 12;
+/** How old the radar's nowcast may be and still be shown: a new one comes every 5 minutes. */
+export const NOWCAST_KEEP_MS = 20 * 60000;
 
 /** Rain in mm an hour as a level. */
 export function levelOf(mmPerHour) {
@@ -55,20 +57,31 @@ function fillFrom(block, base, levels, over) {
   return end;
 }
 
+/** Fades the series from the level of step `end - 1` into what follows it, where that is weaker rain. */
+function fadeAfter(levels, end, known) {
+  const from = levels[end - 1];
+  for (let k = 0; k < FADE_STEPS && end + k < known; k++) {
+    const to = levels[end + k];
+    if (from > to) levels[end + k] = Math.round(from + ((to - from) * (k + 1)) / (FADE_STEPS + 1));
+  }
+}
+
 /**
- * Makes a forecast into one series that starts at the 5-minute step `now` falls in.
+ * Makes a forecast, and the radar nowcast where there is one, into one series that starts at the 5-minute step
+ * `now` falls in.
  *
  * @param {number} now - the moment, in ms.
  * @param {{ hours: object, quarters: object | null } | null} forecast - levels by the hour and, where the finer
  *   model reaches, by the quarter. Each is a block { firstEnds, span, levels }: every value covers the `span` ms
  *   before its time, and `firstEnds` is the first value's time, in ms.
- * @returns {{ base: number, levels: Uint8Array, known: number, fine: boolean } | null}
+ * @param {object | null} [nowcast] - the radar's block for the next 2 hours, where the radar reaches.
+ * @returns {{ base: number, levels: Uint8Array, known: number, made: string } | null}
  *   `levels` has a level for each step from `base` on. Only the first `known` of them are known: past that the
- *   forecast said nothing, which is not the same as dry. `fine` is whether the first hours have the finer
- *   model's quarters in them.
+ *   forecast said nothing, which is not the same as dry. `made` is what the first hours are made of: "radar",
+ *   "fine" for the finer model's quarters, or "coarse" for the hours alone.
  *   Null when there is no forecast.
  */
-export function buildSeries(now, forecast) {
+export function buildSeries(now, forecast, nowcast) {
   if (!forecast) return null;
   const base = Math.floor(now / STEP_MS) * STEP_MS;
   const levels = new Uint8Array(STEPS);
@@ -77,15 +90,15 @@ export function buildSeries(now, forecast) {
   // Rain that is shown and does not come costs less than rain that comes unannounced.
   const quartersEnd = forecast.quarters ? fillFrom(forecast.quarters, base, levels, true) : 0;
   // Where the quarters end, rain only they had fades out rather than stops at a line.
-  if (quartersEnd > 0 && quartersEnd < known) {
-    const from = levels[quartersEnd - 1];
-    for (let k = 0; k < FADE_STEPS && quartersEnd + k < known; k++) {
-      const to = levels[quartersEnd + k];
-      if (from > to) levels[quartersEnd + k] = Math.round(from + ((to - from) * (k + 1)) / (FADE_STEPS + 1));
-    }
-  }
+  if (quartersEnd > 0 && quartersEnd < known) fadeAfter(levels, quartersEnd, known);
   known = Math.max(known, quartersEnd);
-  return { base, levels, known, fine: quartersEnd > 0 };
+  // The radar sees the showers there are, where a model works out where they should be: for as long as it
+  // reaches, the radar is what is shown, also where it says dry and a model says rain. One that has grown old
+  // is not used: its showers have moved on.
+  const radarEnd = nowcast && now - nowcast.firstEnds <= NOWCAST_KEEP_MS ? fillFrom(nowcast, base, levels, false) : 0;
+  if (radarEnd > 0 && radarEnd < known) fadeAfter(levels, radarEnd, known);
+  known = Math.max(known, radarEnd);
+  return { base, levels, known, made: radarEnd > 0 ? "radar" : quartersEnd > 0 ? "fine" : "coarse" };
 }
 
 /**

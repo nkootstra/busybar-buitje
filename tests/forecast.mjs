@@ -47,3 +47,16 @@ export const EVENING = forecast({
 
 /** Two days without rain. */
 export const DRY = forecast({ quarters: of(24, 0), hours: of(48, 0) });
+
+/**
+ * An answer of the radar's relay, asked at moment `at`.
+ *
+ * @param {number[]} rain - mm an hour for each 5 minutes ahead, the first being the 5 minutes `at` is in; what
+ *   is left of the 2 hours is dry.
+ * @param {number} [at]
+ */
+export function nowcast(rain = [], at = AT) {
+  // A run starts with what the radar measured in the 5 minutes before it, and has 24 forecasts after that.
+  const run = Math.floor(at / 300000) * 300;
+  return { run, step: 300, rain: [0].concat(rain, of(24, 0)).slice(0, 25) };
+}

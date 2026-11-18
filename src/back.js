@@ -138,6 +138,6 @@ export function backElements(show) {
     line("now", midnight > LEFT + 24 ? texts.now : "", ROW.days, GREY),
     line("day", texts.tomorrow, ROW.days, GREY, midnight),
     line("window", trouble || texts.windowOnFront(show.window), ROW.window, LIGHT),
-    line("source", show.series.fine ? CREDIT.fine : CREDIT.coarse, ROW.credit, GREY),
+    line("source", CREDIT[show.series.made], ROW.credit, GREY),
   ];
 }

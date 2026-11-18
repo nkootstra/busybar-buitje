@@ -10,7 +10,7 @@ import { readSettings } from "../src/settings.js";
 import { describe } from "../src/show.js";
 import { parseForecast } from "../src/sources.js";
 import { builtApp, launch } from "../tools/sim.mjs";
-import { AT, EVENING, forecast, of } from "./forecast.mjs";
+import { AT, EVENING, forecast, nowcast, of } from "./forecast.mjs";
 
 const evening = (more = {}) => ({ at: AT, forecast: EVENING, ...more });
 
@@ -230,17 +230,17 @@ test("mashing the buttons and the wheel breaks nothing", async () => {
 
 test("Back in the middle of anything quits cleanly, once, and asks nothing more of anyone", async () => {
   for (const moment of [0, 90, 400, 1100]) {
-    const bar = await launch(app, evening());
+    const bar = await launch(app, evening({ nowcast: nowcast([1, 2, 3]) }));
     await bar.wheel(2);
     await bar.advance(moment);
     // A forecast is just due when Back is pressed: it must not be asked for after it.
     bar.handler({ key: "start", action: "short" });
     bar.handler({ key: "back", action: "short" });
     if (bar.handler) bar.handler({ key: "back", action: "short" });
-    const asked = bar.requests.length;
+    const asked = bar.requests.length + bar.radarRequests.length;
     await bar.advance(20 * 60000);
     assert.equal(bar.alive, false, "after " + moment + " ms");
-    assert.equal(bar.requests.length, asked, "no request after Back");
+    assert.equal(bar.requests.length + bar.radarRequests.length, asked, "no request after Back");
     assert.deepEqual(uncaught, []);
   }
 });
@@ -271,8 +271,10 @@ test("a week of a service that fails at random, a Wi-Fi that comes and goes, and
   const roll = dice(42);
   const bar = await launch(app, evening());
   const answers = ODD.concat(of(12, EVENING));
+  const radar = [null, 500, "", {}, { run: 5, step: 300, rain: [1e9, -1] }, { run: 1e12, step: 1, rain: of(25, 2) }, { run: 600, step: 300, rain: null }];
   for (let quarter = 0; quarter < 7 * 96; quarter++) {
     bar.forecast = answers[Math.floor(roll() * answers.length)];
+    bar.nowcast = roll() < 0.5 ? nowcast(of(24, roll() * 8), bar.now - Math.floor(roll() * 3) * 600000) : radar[Math.floor(roll() * radar.length)];
     bar.wifi = roll() < 0.8 ? "connected" : ["disconnected", "connecting", "reconnecting", "unknown", ""][Math.floor(roll() * 5)];
     if (roll() < 0.2) await bar.wheel(Math.floor(roll() * 7) - 3);
     if (roll() < 0.1) await bar.press(roll() < 0.5 ? "ok" : "start");
@@ -281,9 +283,13 @@ test("a week of a service that fails at random, a Wi-Fi that comes and goes, and
   }
   // However it went, with the service back the app shows a forecast again.
   bar.forecast = forecast({ at: bar.now, hours: of(48, 1), quarters: of(24, 0.25) });
+  bar.nowcast = 500;
   bar.wifi = "connected";
   await bar.advance(65 * 60000);
   assertSane(bar, "at the end of the week");
   assert.equal(bar.text("head1"), "Rain for the next 2 days");
   assert.equal(bar.text("source"), "KNMI + DWD via Open-Meteo");
+  bar.nowcast = nowcast(of(24, 1), bar.now);
+  await bar.advance(6 * 60000);
+  assert.equal(bar.text("source"), "KNMI radar + DWD via Open-Meteo");
 });

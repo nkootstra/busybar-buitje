@@ -11,9 +11,9 @@ Each file has one reason to change. Put a change where that reason lives.
 | File | Changes when |
 |---|---|
 | `src/main.js` | the buttons or the loop change: what a press does, how often a frame is drawn |
-| `src/feed.js` | when the forecast is asked for, and what happens when the connection or the service fails |
-| `src/sources.js` | the forecast service changes: its address, its models, or what its answers look like |
-| `src/rain.js` | how a forecast becomes one series, or how that is cut into columns |
+| `src/feed.js` | when each source is asked, and what happens when the connection or a service fails |
+| `src/sources.js` | a service changes: its address, its models, or what its answers look like |
+| `src/rain.js` | how the sources' answers become one series, or how that is cut into columns |
 | `src/headline.js` | what the rain ahead comes to in words |
 | `src/texts.js` | any wording, or a new language |
 | `src/zoom.js` | the window: its lengths, its slide, its return when left alone |
@@ -33,18 +33,27 @@ Imports run one way: `main` uses everything; `screen` uses `front` and `back`; `
 
 Everything keeps rain as a whole number from 0 to 255 on a logarithmic scale: 0 is dry, and `10^((level - 109) / 32)` is mm an hour. `WET` (0.1 mm/h), `RAIN` (0.5) and `HEAVY` (4) in `rain.js` are the levels that matter. `sources.js` turns the forecast's mm into levels once, when an answer arrives; nothing after that computes with mm.
 
-## The source
+## The sources
 
-One request to Open-Meteo, over plain HTTP (a TLS handshake takes the bar 1.5 s), every quarter of an hour. It asks two models at once:
+**The forecast**, one request to Open-Meteo over plain HTTP (a TLS handshake takes the bar 1.5 s), every quarter of an hour. It asks two models at once:
 
-- **`knmi_seamless`, by the hour**, 49 values: KNMI's HARMONIE at 2 km in the Netherlands and Belgium and at 5.5 km in central and northern Europe, other models elsewhere. It answers for any place in the world (Madrid, New York, Tokyo, Sydney and Paramaribo all did on 18 November 2026).
-- **`icon_d2`, by the quarter of an hour**, 24 values: DWD's model for central Europe. Its quarters are real; KNMI's are its hours cut in four, which is why the app does not use them. Utrecht, Brussels, Berlin, Copenhagen and London had them; Madrid, New York and Tokyo did not.
+- **`knmi_seamless`, by the hour**, 49 values: KNMI's HARMONIE at 2 km in the Netherlands and Belgium and at 5.5 km in central and northern Europe, other models elsewhere. It answers for any place in the world.
+- **`icon_d2`, by the quarter of an hour**, 24 values: DWD's model for central Europe. Its quarters are real; KNMI's are its hours cut in four, which is why the app does not use them. Utrecht, Brussels, Berlin, Copenhagen and London had them on 18 November 2026; Madrid, New York, Tokyo, Sydney and Paramaribo did not.
 - **The answer says which it is.** Where both models reach, every value is named after its model (`precipitation_icon_d2`). Where only one does, the values are plain `precipitation`: that model's hours, also under the quarters, which are then not taken.
-- A value is the rain of the hour, or the quarter, *before* its time.
-- **Where the two models disagree, a step shows the stronger rain of the two** (`buildSeries` in `rain.js`). The quarters do not replace the hours: on 18 November 2026 KNMI had drizzle over Borne for two hours where ICON-D2 had none, and the app, which then let the quarters win, called it dry. Rain shown that does not come costs less than rain that comes unannounced.
+- **Where the two models disagree, a step shows the stronger rain of the two** (`buildSeries` in `rain.js`). On 18 November 2026 KNMI had drizzle over Borne for two hours where ICON-D2 had none, and the app, which then let the quarters win, called it dry.
+
+**The radar's nowcast**, one request to the app's own relay over plain HTTP, every 5 minutes, only for a place inside the radar's picture (`inRadarReach`):
+
+- The relay is its own project, busybar-buitje-relay: a Cloudflare Worker that reads KNMI's radar files, which need an API key and are far too large for the bar. Its answer is `{ run, step, rain }`: 25 values of mm an hour, 5 minutes apart, the first measured in the 5 minutes before `run`. `rain` is null where the radar has no data; the app then leaves it alone for 6 hours. Change the answer's shape in both projects together.
+- **For as long as it reaches, the radar is what is shown**, also where it says dry and a model says rain. It is not joined with the models the way they are with each other: the radar sees the showers there are.
+- **A nowcast older than 20 minutes is not shown** (`NOWCAST_KEEP_MS`): its showers have moved on. The series is then made of the models alone.
+
+For both:
+
+- A value is the rain of the time *before* its moment.
 - **A list stops at its first missing value.** What follows a gap is not taken: the gap would read as dry.
 - **A series knows how far it reaches** (`known`). Past that the forecast said nothing, which is not the same as dry: the headline speaks only of what is known ("Dry for the next 3 hours"), the timeline's axis ends there, and the back strip is dark past it. Keep it that way in anything that reads a series.
-- Keep the credit line on the back display. It is the attribution the data's licence (CC BY 4.0) asks for.
+- **A series says what it is made of** (`made`: radar, fine or coarse), and the credit line on the back display follows it. Keep that line: it is the attribution the data's licence (CC BY 4.0) asks for.
 - README.md has the table of what a person gets where: keep it true.
 
 ## When the connection fails
@@ -52,7 +61,9 @@ One request to Open-Meteo, over plain HTTP (a TLS handshake takes the bar 1.5 s)
 `feed.js` asks the bar for its Wi-Fi state before it asks the internet for anything.
 
 - **No Wi-Fi** (`disconnected`, `connecting`, `reconnecting`, `disconnecting`): nothing is requested, the displays say so, and the Wi-Fi is looked at again every minute. Any other answer, or none, counts as connected: the requests will tell.
-- **Wi-Fi, but the service does not answer:** it is asked again after 1 minute, then 2, then 4, doubling up to its usual quarter of an hour. One request at a time.
+- **Wi-Fi, but the forecast service does not answer:** it is asked again after 1 minute, then 2, then 4, doubling up to its usual quarter of an hour. One request at a time, the forecast before the radar.
+- **The forecast is what the app cannot do without.** `freshAt`, `problem` and the mark for old data speak of it alone. When the radar's relay fails, nothing is said: it is asked again at its usual 5 minutes, and once its last answer is 20 minutes old the series is made of the models.
+- **Start cannot make a burst:** however often it is pressed, a source is not asked again within 10 seconds.
 - **Data on show when it fails:** it stays. After 45 minutes, three missed forecasts, it gets a red dot on the front, in both views, and the back display says what is wrong and when the data is from, in the line that names the window. The credit line stays.
 - **The data is taken off** when it has nothing ahead of now any more, or after 3 hours without an answer. The back display is then wiped whole: the bar keeps an element until another with its id comes.
 - `feed.problem` is worked out from the feed's state when it is read, not set by the last request.
@@ -69,7 +80,7 @@ Measured on BUSY Bar Emulator, which runs apps at the bar's speed (firmware 1.3.
 | Resting: only the rain shimmers | 50 ms |
 | The window sliding, with its name on show | 119 ms |
 | Both displays whole, when new data has come | 212 ms |
-| Making a series of a fresh forecast, every quarter of an hour | 28 ms |
+| Making a series of fresh answers, every 5 minutes where the radar reaches | 33 ms |
 
 Sending the front display takes the bar about 45 ms of each, whatever the app does. A frame of the slide must stay under 125 ms for 8 frames a second.
 
@@ -95,7 +106,7 @@ Sending the front display takes the bar about 45 ms of each, whatever the app do
 
 ## Tests and tools
 
-- `npm test` builds the app, then runs the series, the headline, the settings and the built app on a pretend bar (`tools/sim.mjs`): its clock moves only when a test says so, its Wi-Fi and the forecast service answer what the test gives.
+- `npm test` builds the app, then runs the series, the headline, the settings and the built app on a pretend bar (`tools/sim.mjs`): its clock moves only when a test says so, its Wi-Fi, the forecast service and the radar's relay answer what the test gives.
 - `tests/stress.test.mjs` tries to break it: answers no service should give, settings no page should save, mashed buttons, jumping clocks, a week of random failures. Add to its lists when a new way to break the app turns up.
 - `tests/forecast.mjs` makes the forecasts the tests run on, in the shape the service answers; most share one evening, `EVENING`, and are written for its rain.
 - `tests/fixtures` holds two live answers, one with quarters and one without. The tests check their shape, not their weather: `sh tools/fetch-fixtures.sh` may take new ones at any time.

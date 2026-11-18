@@ -1,5 +1,6 @@
 // A pretend BUSY Bar for tests: runs the built app (dist/*.tgz) with the bar's globals replaced by fakes,
-// a clock that only moves when a test says so, and the forecast service answering what the test gives.
+// a clock that only moves when a test says so, and the forecast service and the radar's relay answering what
+// the test gives.
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -10,6 +11,9 @@ import { bundle } from "./bundle.mjs";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const API = "http://localhost/api/";
 const FORECAST = "http://api.open-meteo.com/";
+const NOWCAST = "/v1/rain?";
+/** What the radar's relay answers for a place the radar has no data for. */
+export const NO_RADAR = { run: 1, step: 300, rain: null };
 const flush = () => new Promise((done) => setImmediate(done));
 
 /**
@@ -48,6 +52,8 @@ export function xpmRows(data) {
  * @param {string} [options.wifi] - the state of the bar's Wi-Fi; "connected" unless given.
  * @param {object | string | number | null} [options.forecast] - what the forecast service answers: its JSON,
  *   some other text, an HTTP status, or null for a request that fails.
+ * @param {object | string | number | null} [options.nowcast] - what the radar's relay answers, in the same
+ *   way; that the radar has no data for the place unless given.
  */
 export async function launch(code, options = {}) {
   const { at = Date.UTC(2026, 10, 17, 20, 14), offsetMin = 60, settings = {} } = options;
@@ -63,8 +69,9 @@ export async function launch(code, options = {}) {
     sounds: [],
     lights: [],
     errors: [],
-    /** The addresses the app asked outside the bar, in order. */
+    /** The addresses the app asked the forecast service, and the radar's relay, in order. */
     requests: [],
+    radarRequests: [],
     /** How many draw requests reached the display. */
     draws: 0,
     settings: { ...settings },
@@ -72,6 +79,8 @@ export async function launch(code, options = {}) {
     wifi: options.wifi || "connected",
     /** What the forecast service answers; a test may change it while the app runs. */
     forecast: options.forecast === undefined ? null : options.forecast,
+    /** What the radar's relay answers; a test may change it while the app runs. */
+    nowcast: options.nowcast === undefined ? NO_RADAR : options.nowcast,
     /** Calls of the bar's own API that answer 500, by the start of their path; a test may change them. */
     broken: options.broken || [],
     handler: null,
@@ -152,6 +161,10 @@ export async function launch(code, options = {}) {
     if (url.startsWith(FORECAST)) {
       bar.requests.push(url);
       return answer(bar.forecast);
+    }
+    if (url.indexOf(NOWCAST) > 0) {
+      bar.radarRequests.push(url);
+      return answer(bar.nowcast);
     }
     if (!url.startsWith(API)) return Promise.reject(new Error("no network: " + url));
     const path = url.slice(API.length);

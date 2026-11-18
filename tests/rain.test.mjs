@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { HEAVY, RAIN, STEPS, STEP_MS, WET, buildSeries, levelOf, sampleColumns } from "../src/rain.js";
-import { parseForecast } from "../src/sources.js";
-import { AT, EVENING, forecast, of } from "./forecast.mjs";
+import { inRadarReach, parseForecast, parseNowcast } from "../src/sources.js";
+import { AT, EVENING, forecast, nowcast, of } from "./forecast.mjs";
 
 const fixture = (name) => JSON.parse(readFileSync(new URL("./fixtures/" + name, import.meta.url), "utf8"));
 const HOUR = 3600000;
@@ -67,7 +67,7 @@ test("the series starts at the step now falls in, with the quarters for the firs
   const series = buildSeries(AT, parseForecast(EVENING));
   assert.equal(series.base, Math.floor(AT / STEP_MS) * STEP_MS);
   assert.equal(series.levels.length, STEPS);
-  assert.equal(series.fine, true);
+  assert.equal(series.made, "fine");
   // 21:10 is step 0. Dry until 21:45, step 7; drizzle of 0.3 mm an hour until 22:30, step 16.
   const drizzle = levelOf(0.3);
   assert.deepEqual(Array.from(series.levels.slice(0, 17)), [...of(7, 0), ...of(9, drizzle), 0]);
@@ -104,9 +104,55 @@ test("where the two models disagree, the stronger rain of the two is shown", () 
   assert.equal(both.levels[10], levelOf(4));
 });
 
+test("the radar's nowcast is what the first 2 hours show, whatever the models say", () => {
+  // The models have drizzle all evening; the radar sees a shower from 21:30 to 21:45 and nothing else.
+  const models = parseForecast(forecast({ hours: of(48, 0.3), quarters: of(24, 0.1) }));
+  const radar = parseNowcast(nowcast([0, 0, 0, 0, 3, 3, 3]));
+  const series = buildSeries(AT, models, radar);
+  assert.equal(series.made, "radar");
+  assert.deepEqual(Array.from(series.levels.slice(0, 8)), [0, 0, 0, 0, levelOf(3), levelOf(3), levelOf(3), 0]);
+  assert.equal(series.levels[23], 0, "dry where the radar says dry, to the end of its 2 hours");
+  assert.equal(series.levels[24], levelOf(0.4), "and the models from there on");
+  assert.equal(series.known, 574);
+});
+
+test("rain the radar still has at its end fades into the models", () => {
+  const models = parseForecast(forecast({ hours: of(48, 0) }));
+  const series = buildSeries(AT, models, parseNowcast(nowcast(of(24, 5))));
+  assert.equal(series.levels[23], levelOf(5));
+  const after = Array.from(series.levels.slice(23, 37));
+  for (let i = 1; i < after.length; i++) assert.ok(after[i] < after[i - 1], "the fade falls: " + after.join(","));
+  assert.equal(series.levels[36], 0);
+});
+
+test("a nowcast that has grown old is not shown", () => {
+  const models = parseForecast(forecast({ hours: of(48, 0) }));
+  const radar = parseNowcast(nowcast(of(24, 5)));
+  assert.equal(buildSeries(AT + 15 * 60000, models, radar).made, "radar");
+  const without = buildSeries(AT + 26 * 60000, models, radar);
+  assert.equal(without.made, "coarse");
+  assert.equal(without.levels[0], 0);
+  assert.equal(buildSeries(AT, models, null).made, "coarse");
+  assert.equal(buildSeries(AT, null, radar), null, "the radar alone is no forecast");
+});
+
+test("the relay's answer is rain by the 5 minutes, nothing where the radar has no data, or not an answer", () => {
+  assert.deepEqual(parseNowcast({ run: 600, step: 300, rain: [1, 10, 0] }), { firstEnds: 600000, span: 300000, levels: [109, 141, 0] });
+  assert.equal(parseNowcast({ run: 600, step: 300, rain: null }), null);
+  for (const odd of [null, undefined, "", [], {}, { run: 600, step: 300 }, { run: 600, step: 300, rain: [] }, { run: 0, step: 300, rain: [1] }, { run: 600, step: 300, rain: [1, null] }, { run: 600, step: 300, rain: "wet" }, { rain: null }]) {
+    assert.equal(parseNowcast(odd), undefined, JSON.stringify(odd));
+  }
+});
+
+test("the radar is asked only for places its picture covers", () => {
+  for (const [name, lat, lon, inside] of [["Utrecht", 52.09, 5.12, true], ["Brussels", 50.85, 4.35, true], ["Borne", 52.3, 6.75, true], ["Madrid", 40.42, -3.7, false], ["Berlin", 52.52, 13.4, false], ["Oslo", 59.91, 10.75, false], ["Dublin", 53.35, -6.26, false]]) {
+    assert.equal(inRadarReach({ lat, lon }), inside, name);
+  }
+});
+
 test("without quarters the hours are all there is", () => {
   const series = seriesOf({ hours: [1, 2, 3] });
-  assert.equal(series.fine, false);
+  assert.equal(series.made, "coarse");
   // The hour now is in ends at 22:00, step 10.
   assert.equal(series.levels[0], levelOf(1));
   assert.equal(series.levels[9], levelOf(1));

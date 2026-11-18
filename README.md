@@ -43,25 +43,24 @@ The app reads its settings when it starts: start it again after a change.
 
 ## Where it works
 
-Anywhere, with more detail in central Europe.
+Anywhere, and best in the Netherlands and Belgium.
 
 | Where | What you get |
 |---|---|
-| The Netherlands, Belgium, Germany and the rest of central Europe, with Denmark and southern England | The next 6 hours by the quarter of an hour, then by the hour for the 2 days after. |
-| The rest of the world | All 48 hours by the hour. Showers are placed less precisely. |
+| The Netherlands, Belgium and a strip around them | The next 2 hours from the rain radar, in steps of 5 minutes for your square kilometre; then weather models, by the quarter of an hour up to 6 hours ahead and by the hour for the 2 days after. |
+| The rest of central Europe, with Denmark and southern England | Weather models: the next 6 hours by the quarter of an hour, then by the hour. |
+| The rest of the world | Weather models: all 48 hours by the hour. Showers are placed less precisely. |
 
-The app finds out by itself which of the two it is in: the forecast for a place comes with quarters or without. The last line of the back display names the sources in use.
+The app finds out by itself which of these it is in. The last line of the back display names the sources in use.
 
 ## Where the rain comes from
 
-Weather models, through [Open-Meteo](https://open-meteo.com), in one request every quarter of an hour:
+- **The radar:** KNMI's precipitation nowcast, which follows the showers the Dutch radars see now for the next 2 hours. KNMI publishes it as a picture of the whole country; a small relay made for this app, [busybar-buitje-relay](https://github.com/nkootstra/busybar-buitje-relay), reads those and answers a bar with the numbers for its place.
+- **The models,** through [Open-Meteo](https://open-meteo.com): KNMI's HARMONIE by the hour where it reaches (2 km in the Netherlands and Belgium, 5.5 km in central and northern Europe) and other models elsewhere, and DWD's ICON-D2 by the quarter of an hour for the first 6 hours.
 
-- by the hour: KNMI's HARMONIE model where it reaches (2 km in the Netherlands and Belgium, 5.5 km in central and northern Europe), and other models elsewhere;
-- by the quarter of an hour, for the first 6 hours: ICON-D2, of Germany's weather service DWD.
+Where the radar reaches, the first 2 hours are the radar's, also when it says dry and a model says rain: the radar sees the showers there are. Where the two models disagree, the app shows the stronger rain of the two: rain that is shown and does not come costs less than rain that comes unannounced.
 
-The two models often disagree about the first hours. The app then shows the stronger rain of the two: rain that is shown and does not come costs less than rain that comes unannounced.
-
-These are forecasts, not radar: a shower can come earlier or later than shown, and a small one can be missed. That goes for the rain alert too. The data is under CC BY 4.0.
+When the relay does not answer, the app shows the models and says nothing: they are a forecast, so a shower can then come earlier or later than shown, and a small one can be missed. That goes for the rain alert too. All of the data is under CC BY 4.0.
 
 The bar needs Wi-Fi. Without it the app says so and waits; when the connection drops it keeps showing what it had, marked as old and with the time it is from, for up to 3 hours.
 

@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { before, test } from "node:test";
 import { builtApp, launch } from "../tools/sim.mjs";
-import { AT, DRY, EVENING, forecast, of } from "./forecast.mjs";
+import { AT, DRY, EVENING, forecast, nowcast, of } from "./forecast.mjs";
 
 /** The bar at 21:14 on the evening most tests share: dry, drizzle from 21:45, rain from 23:00. */
 const evening = (more = {}) => ({ at: AT, forecast: EVENING, ...more });
@@ -239,10 +239,91 @@ test("a service that does not answer is asked less and less often, and never in 
   assert.ok(before < 45, before + " requests in 8 hours");
 });
 
-test("Start asks for a fresh forecast", async () => {
-  const bar = await launch(app, evening());
+test("Start asks for a fresh forecast, but however often it is pressed not more than once in 10 seconds", async () => {
+  const bar = await launch(app, evening({ nowcast: nowcast() }));
+  await bar.advance(15000);
+  const radar = bar.radarRequests.length;
   await bar.press("start");
   assert.equal(bar.requests.length, 2);
+  for (let i = 0; i < 8; i++) await bar.press("start");
+  assert.equal(bar.requests.length, 2);
+  assert.equal(bar.radarRequests.length, radar + 1);
+  await bar.advance(10000);
+  await bar.press("start");
+  assert.equal(bar.requests.length, 3);
+});
+
+/** The evening with the radar on: it sees a shower from 21:30 to 21:45, and nothing else for 2 hours. */
+const SHOWER = nowcast([0, 0, 0, 0, 3, 3, 3]);
+
+test("where the radar reaches, the first 2 hours are the radar's", async () => {
+  const bar = await launch(app, evening({ nowcast: SHOWER }));
+  await bar.advance(2000);
+  assert.equal(bar.radarRequests.length, 1);
+  assert.match(bar.radarRequests[0], /\/v1\/rain\?lat=52\.09&lon=5\.12$/);
+  assert.equal(bar.text("head1"), "Rain in 15 minutes", "the radar's shower, not the model's drizzle at 21:45");
+  assert.equal(bar.text("source"), "KNMI radar + DWD via Open-Meteo");
+  assert.deepEqual(bar.errors, []);
+});
+
+test("the radar is asked every 5 minutes, the forecast every quarter", async () => {
+  const bar = await launch(app, evening({ nowcast: SHOWER }));
+  await bar.advance(31 * 60000);
+  assert.equal(bar.requests.length, 3);
+  assert.equal(bar.radarRequests.length, 7);
+});
+
+test("outside the radar's picture it is never asked", async () => {
+  const place = { mode: "fixed", name: "Madrid", lat: 40.42, lon: -3.7 };
+  const bar = await launch(app, evening({ nowcast: SHOWER, settings: { place } }));
+  await bar.advance(3 * 3600000);
+  assert.equal(bar.radarRequests.length, 0);
+  assert.equal(bar.text("source"), "KNMI + DWD via Open-Meteo");
+});
+
+test("where the radar has no data it is left alone for hours, and the models are shown", async () => {
+  const bar = await launch(app, evening());
+  await bar.advance(2000);
+  assert.equal(bar.text("source"), "KNMI + DWD via Open-Meteo");
+  await bar.advance(5 * 3600000);
+  assert.equal(bar.radarRequests.length, 1);
+  await bar.advance(2 * 3600000);
+  assert.equal(bar.radarRequests.length, 2);
+});
+
+test("when the radar fails the app shows the models, and does not call its data old", async () => {
+  const bar = await launch(app, evening({ nowcast: SHOWER }));
+  await bar.advance(2000);
+  assert.equal(bar.text("source"), "KNMI radar + DWD via Open-Meteo");
+  for (const failure of [null, 500, "<html>502</html>", { error: "no" }]) {
+    bar.nowcast = failure;
+    await bar.advance(10 * 60000);
+  }
+  assert.equal(bar.text("source"), "KNMI + DWD via Open-Meteo", "the radar's part has grown old and is gone");
+  assert.notEqual(bar.front[15][71], "e", "the forecast is fresh: nothing is old");
+  assert.equal(bar.text("window"), "Next 2 hours on the front");
+  assert.equal(bar.radarRequests.length, 9, "asked at its usual pace, not faster");
+  // The radar comes back.
+  bar.nowcast = nowcast([], bar.now);
+  await bar.advance(6 * 60000);
+  assert.equal(bar.text("source"), "KNMI radar + DWD via Open-Meteo");
+});
+
+test("when the forecast fails the radar alone does not keep the data fresh", async () => {
+  const bar = await launch(app, evening({ nowcast: SHOWER }));
+  bar.forecast = null;
+  await bar.advance(50 * 60000);
+  assert.equal(bar.front[15][71], "e");
+  assert.equal(bar.text("window"), "No answer. Data from 21:14");
+});
+
+test("without Wi-Fi the radar is not asked either", async () => {
+  const bar = await launch(app, evening({ nowcast: SHOWER, wifi: "disconnected" }));
+  await bar.advance(30 * 60000);
+  assert.equal(bar.radarRequests.length, 0);
+  bar.wifi = "connected";
+  await bar.advance(2 * 60000);
+  assert.equal(bar.radarRequests.length, 1);
 });
 
 test("without Wi-Fi it says so, asks nothing of the internet, and starts by itself when the Wi-Fi comes", async () => {
