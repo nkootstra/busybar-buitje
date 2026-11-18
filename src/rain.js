@@ -4,14 +4,17 @@
 // 10^((level - 109) / 32) is the rain in mm an hour. That is the scale the radar feed uses, and it lets the
 // drawing compare whole numbers instead of computing with fractions on every frame, which the bar is slow at.
 
-/** One step of the series, and how many of them there are: 48 hours. */
+/** How far ahead the app looks, the length of one step of the series, and how many steps that makes. */
+export const HOURS = 48;
 export const STEP_MS = 5 * 60000;
-export const STEPS = 576;
+export const STEPS = (HOURS * 3600000) / STEP_MS;
 
 /** Levels that matter: rain you would notice (0.1 mm/h), where drizzle ends (0.5) and where heavy rain starts (4). */
 export const WET = 77;
 export const RAIN = 100;
 export const HEAVY = 129;
+/** Fainter than rain you would notice, but still drawn: the edge of a shower. */
+export const FAINT = WET - 7;
 
 /** The radar nowcast reaches 2 hours; over the hour after it the series fades into the model. */
 const NOWCAST_STEPS = 24;
@@ -23,82 +26,58 @@ export function levelOf(mmPerHour) {
   return Math.max(1, Math.min(255, Math.round(109 + (32 * Math.log(mmPerHour)) / Math.LN10)));
 }
 
-/** A level as rain in mm an hour. */
-export function mmPerHour(level) {
-  return level > 0 ? Math.pow(10, (level - 109) / 32) : 0;
-}
-
 /**
- * Reads the radar nowcast: lines of "077|21:45", a level and a clock time in the Netherlands, 5 minutes apart.
- * Returns { minutes, levels }: the first line's time as minutes of the day, and the levels in order.
- * Returns null when the text is something else, such as the answer for a place the radar does not cover.
+ * How many of `rows` rows rain of this level hangs down when it is drawn: 1 for the faintest, all of them from
+ * 10 mm an hour. Both displays draw rain by this rule.
  */
-export function parseNowcast(text) {
-  const levels = [];
-  let minutes = -1;
-  const lines = String(text).split("\n");
-  for (let i = 0; i < lines.length; i++) {
-    const m = /^(\d{1,3})\|(\d\d):(\d\d)/.exec(lines[i]);
-    if (!m) continue;
-    if (minutes < 0) minutes = parseInt(m[2], 10) * 60 + parseInt(m[3], 10);
-    levels.push(Math.min(255, parseInt(m[1], 10)));
-  }
-  return levels.length ? { minutes, levels } : null;
+export function reachOf(level, rows) {
+  if (level < FAINT) return 0;
+  return Math.max(1, Math.min(rows, Math.floor(((level - FAINT + 4) * rows) / 75)));
 }
 
-/**
- * Reads the model's forecast (Open-Meteo, times as unix seconds). An hourly value is the rain that fell in the
- * hour before its time, a quarterly value in the 15 minutes before.
- * Returns { hours: { end, levels }, quarters: { end, levels } } with `end` the first value's time in ms, or null.
- */
-export function parseModel(json) {
-  const read = (block, perHour) => {
-    if (!block || !block.time || !block.precipitation || !block.time.length) return null;
-    const levels = [];
-    for (let i = 0; i < block.time.length; i++) levels.push(levelOf(block.precipitation[i] * perHour));
-    return { end: block.time[0] * 1000, levels };
-  };
-  const hours = read(json && json.hourly, 1);
-  if (!hours) return null;
-  return { hours, quarters: read(json.minutely_15, 4) };
-}
-
-/** The level at moment `at` from values that each cover the `span` ms before their time; -1 outside them. */
-function levelAt(values, span, at) {
-  const index = Math.floor((at - values.end) / span) + 1;
-  return index >= 0 && index < values.levels.length ? values.levels[index] : -1;
+/** The level at moment `at` from a block of values that each cover the `span` ms before their time; -1 outside it. */
+function levelAt(block, at) {
+  const index = Math.floor((at - block.end) / block.span) + 1;
+  return index >= 0 && index < block.levels.length ? block.levels[index] : -1;
 }
 
 /**
  * Joins the sources into one series that starts at the 5-minute step `now` falls in.
  *
  * @param {number} now - the moment, in ms.
- * @param {number} offsetMin - the zone the nowcast's clock times are in, minutes east of UTC.
- * @param {{minutes: number, levels: number[]} | null} nowcast - from parseNowcast; null where there is no radar.
- * @param {object | null} model - from parseModel.
- * @returns {{ base: number, levels: Uint8Array, radar: boolean } | null} null when there is nothing to show.
+ * @param {{ minute: number, levels: number[] } | null} nowcast - the radar's levels, 5 minutes apart, and the
+ *   minute of the hour of the first; null where there is no radar.
+ * @param {{ hours: object, quarters: object | null } | null} model - levels by the hour and by the quarter,
+ *   each a block { end, span, levels }: every value covers the `span` ms before its time, and `end` is the
+ *   first value's time, in ms.
+ * @returns {{ base: number, levels: Uint8Array, known: number, radar: boolean } | null}
+ *   `levels` has a level for each step from `base` on. Only the first `known` of them are known: past that the
+ *   sources said nothing, which is not the same as dry. `radar` is whether the first hours are the radar's.
+ *   Null when there is nothing to show.
  */
-export function buildSeries(now, offsetMin, nowcast, model) {
+export function buildSeries(now, nowcast, model) {
   if (!nowcast && !model) return null;
   const base = Math.floor(now / STEP_MS) * STEP_MS;
   const levels = new Uint8Array(STEPS);
+  let known = 0;
 
   if (model) {
     for (let i = 0; i < STEPS; i++) {
       // The middle of the step decides which hour or quarter it belongs to.
       const at = base + i * STEP_MS + STEP_MS / 2;
-      let level = model.quarters && !nowcast ? levelAt(model.quarters, 15 * 60000, at) : -1;
-      if (level < 0) level = levelAt(model.hours, 3600000, at);
-      levels[i] = level < 0 ? 0 : level;
+      let level = model.quarters && !nowcast ? levelAt(model.quarters, at) : -1;
+      if (level < 0) level = levelAt(model.hours, at);
+      if (level < 0) continue;
+      levels[i] = level;
+      known = i + 1;
     }
   }
 
   if (nowcast) {
-    // The nowcast names clock times, not dates: its first line is the step nearest to now with that time.
-    const baseMinutes = Math.floor((base + offsetMin * 60000) / 60000) % 1440;
-    let ahead = ((nowcast.minutes - baseMinutes + 2160) % 1440) - 720;
-    if (ahead < -60 || ahead > 60) ahead = 0;
-    const first = Math.round(ahead / 5);
+    // The radar's first line is within a few steps of now, so the minute of the hour places it; and since the
+    // minute is the same in every zone a whole number of hours apart, the bar's own zone does not come into it.
+    const baseMinute = Math.floor(base / 60000) % 60;
+    const first = Math.round((((nowcast.minute - baseMinute + 90) % 60) - 30) / 5);
     let last = -1;
     for (let i = 0; i < nowcast.levels.length && i < NOWCAST_STEPS + 2; i++) {
       const step = first + i;
@@ -107,17 +86,18 @@ export function buildSeries(now, offsetMin, nowcast, model) {
       last = step;
     }
     // Radar and model seldom agree at the seam: fade from the one into the other.
-    if (model && last >= 0) {
+    if (last >= 0 && last + 1 < known) {
       const from = levels[last];
-      for (let k = 1; k <= FADE_STEPS && last + k < STEPS; k++) {
+      for (let k = 1; k <= FADE_STEPS && last + k < known; k++) {
         const to = levels[last + k];
         levels[last + k] = Math.round(from + ((to - from) * k) / (FADE_STEPS + 1));
       }
     }
     // The radar may start a step ahead of now: the steps before it are as the first one.
     for (let step = 0; step < first && step < STEPS; step++) levels[step] = nowcast.levels[0];
+    known = Math.max(known, last + 1);
   }
-  return { base, levels, radar: !!nowcast };
+  return { base, levels, known, radar: !!nowcast };
 }
 
 /**

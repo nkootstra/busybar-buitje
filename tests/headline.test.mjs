@@ -11,7 +11,7 @@ const CET = 60;
 function rain(...spells) {
   const levels = new Uint8Array(STEPS);
   for (const [from, steps, mm] of spells) levels.fill(levelOf(mm), from, from + steps);
-  return { base: NOW, levels };
+  return { base: NOW, levels, known: STEPS };
 }
 const say = (series, language = "en", now = NOW) => headline(series, now, CET, language);
 
@@ -72,6 +72,19 @@ test("dry for the two days", () => {
   assert.equal(words.full, "Dry for the next 2 days");
   assert.equal(words.top, "DRY");
   assert.equal(words.wet, false);
+});
+
+test("it speaks only of what the forecast covers: with 2 hours known, not of 2 days", () => {
+  const radarOnly = (series) => ({ ...series, known: 24 });
+  const dry = say(radarOnly(rain()));
+  assert.equal(dry.full, "Dry for the next 2 hours");
+  assert.equal(dry.bottom, "2 HRS");
+  assert.equal(say(radarOnly(rain([0, STEPS, 1]))).full, "Rain for the next 2 hours");
+  assert.equal(say(radarOnly(rain()), "nl").full, "Droog de komende 2 uur");
+  // Rain that the forecast does not reach is not seen.
+  assert.equal(say(radarOnly(rain([30, 6, 9]))).full, "Dry for the next 2 hours");
+  // The model's last hour comes and goes: a little short of 48 hours still counts as 2 days.
+  assert.equal(say({ ...rain(), known: STEPS - 12 }).full, "Dry for the next 2 days");
 });
 
 test("rain too faint to notice is dry", () => {

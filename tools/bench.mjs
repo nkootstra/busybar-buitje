@@ -10,7 +10,6 @@ import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const work = join(root, ".bench");
-const id = "io.kootstra.buitje.bench";
 const emulator = process.env.BUSY_EMULATOR || join(homedir(), ".busy-emulator/bin/busy-emulator");
 /** Where the emulated bar answers. */
 const BAR = "127.0.0.1:8640";
@@ -26,6 +25,8 @@ cpSync(join(root, "src"), join(work, "src"), { recursive: true });
 cpSync(join(root, "tools/bench-app.js"), join(work, "src/main.js"));
 rmSync(join(work, "src/appmeta/settings.json"), { force: true });
 const manifest = JSON.parse(readFileSync(join(root, "src/appmeta/manifest.json"), "utf8"));
+/** The benchmark is an app of its own on the bar, beside the real one. */
+const id = manifest.id + ".bench";
 writeFileSync(join(work, "src/appmeta/manifest.json"), JSON.stringify({ ...manifest, id, name: "Buitje bench" }));
 writeFileSync(join(work, "package.json"), JSON.stringify({ name: "buitje-bench", private: true, type: "module" }));
 execFileSync(join(root, "node_modules/.bin/busy-cli"), ["build"], { cwd: work, stdio: "ignore" });

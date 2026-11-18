@@ -46,6 +46,7 @@ export function xpmRows(data) {
  * @param {number} [options.at] - the moment the bar's clock starts at, in ms.
  * @param {number} [options.offsetMin] - the bar's zone, minutes east of UTC.
  * @param {object} [options.settings] - values of the app's settings.
+ * @param {string} [options.wifi] - the state of the bar's Wi-Fi; "connected" unless given.
  * @param {string | number | null} [options.radar] - what the radar answers: its text, an HTTP status, or null
  *   for a request that fails.
  * @param {object | number | null} [options.model] - what the model answers: its JSON, an HTTP status, or null.
@@ -69,12 +70,18 @@ export async function launch(code, options = {}) {
     /** How many draw requests reached the display. */
     draws: 0,
     settings: { ...settings },
+    /** The state of the bar's Wi-Fi; a test may change it while the app runs. */
+    wifi: options.wifi || "connected",
     /** What the sources answer; a test may change them while the app runs. */
     radar: options.radar === undefined ? null : options.radar,
     model: options.model === undefined ? null : options.model,
+    /** Calls of the bar's own API that answer 500, by the start of their path; a test may change them. */
+    broken: options.broken || [],
     handler: null,
-    get now() {
-      return now;
+    /** Sets the bar's clock `ms` on, or back; timers keep the time they had left. */
+    jump(ms) {
+      now += ms;
+      for (const timer of timers.values()) timer.at += ms;
     },
     /** Whether anything still keeps the app alive. */
     get alive() {
@@ -99,8 +106,8 @@ export async function launch(code, options = {}) {
       now = end;
       await flush();
     },
-    async press(key, action = "short") {
-      if (bar.handler) bar.handler({ key, action });
+    async press(key) {
+      if (bar.handler) bar.handler({ key, action: "short" });
       await bar.advance(700);
     },
     async wheel(clicks) {
@@ -151,12 +158,14 @@ export async function launch(code, options = {}) {
     }
     if (!url.startsWith(API)) return Promise.reject(new Error("no network: " + url));
     const path = url.slice(API.length);
+    if (bar.broken.some((start) => path.startsWith(start))) return reply(500, { error: "broken" });
     if (path === "time") {
       const local = new Date(now + offsetMin * 60000).toISOString().slice(0, 19);
       const abs = Math.abs(offsetMin);
       return reply(200, { timestamp: local + (offsetMin < 0 ? "-" : "+") + pad(Math.floor(abs / 60)) + ":" + pad(abs % 60) });
     }
     if (path.startsWith("apps/settings")) return reply(200, { values: bar.settings });
+    if (path === "wifi/status") return reply(200, { state: bar.wifi });
     if (path === "audio/play") {
       bar.sounds.push(JSON.parse(init.body).stock_path);
       return reply(200, null);

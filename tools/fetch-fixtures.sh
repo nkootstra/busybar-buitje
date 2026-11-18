@@ -1,5 +1,6 @@
 #!/bin/sh
-# Saves live answers of the two sources as test fixtures, and prints the moment they were taken.
+# Saves live answers of the two sources as test fixtures, with the moment they were taken in taken-at.txt.
+# The tests in tests/app.test.mjs expect the rain of the answers that are there now: new ones need new expectations.
 # Usage: sh tools/fetch-fixtures.sh   (from the project's root)
 set -e
 F=tests/fixtures

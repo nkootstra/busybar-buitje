@@ -1,78 +1,66 @@
-// The app the benchmark runs on the bar: it paints and sends frames the way Buitje does, with rain made up here
-// instead of fetched, and logs how long a frame takes. tools/bench.mjs builds it next to the real sources and
-// reads the log.
-import { backText, bitmap, draw } from "./bar.js";
-import { createCanvas, toXpm } from "./canvas.js";
-import { headline } from "./headline.js";
-import { STEPS, buildSeries, sampleColumns } from "./rain.js";
-import { drawChart, mapXpm } from "./screens.js";
+// The app the benchmark runs on the bar: it paints and sends frames with the functions Buitje itself uses, with
+// rain made up here instead of fetched, and logs how long a frame takes. tools/bench.mjs builds it next to the
+// real sources, under an id of its own, and reads the log.
+import manifest from "./appmeta/manifest.json";
+import { backElements } from "./back.js";
+import { bitmap, draw } from "./bar.js";
+import { toXpm } from "./canvas.js";
+import { createFront, drawFront } from "./front.js";
+import { STEPS, buildSeries } from "./rain.js";
+import { describe } from "./show.js";
 
-const APP = "io.kootstra.buitje.bench";
+const APP = manifest.id;
 const FRAMES = 10;
-const front = createCanvas(72, 16);
-const columns = new Uint8Array(72);
+const front = createFront();
+const start = Date.now();
 
 /** Two days with a fair amount of rain in them: showers of every strength, and dry spells between. */
-const series = { base: Date.now(), levels: new Uint8Array(STEPS), radar: true };
+const rainy = { base: start, levels: new Uint8Array(STEPS), known: STEPS, radar: true };
 for (let i = 0; i < STEPS; i++) {
   const wave = (i * 7) % 96;
-  series.levels[i] = wave < 40 ? 75 + ((wave * 3 + i) % 70) : 0;
+  rainy.levels[i] = wave < 40 ? 75 + ((wave * 3 + i) % 70) : 0;
 }
 
 /** Two dry days with one shower at the very end: the headline has to look all the way to find it. */
-const dry = { base: series.base, levels: new Uint8Array(STEPS), radar: true };
+const dry = { base: start, levels: new Uint8Array(STEPS), known: STEPS, radar: true };
 dry.levels.fill(110, STEPS - 6);
 
-/** One frame of the timeline, as the app paints it: `key` says whether the picture is new. */
-function chart(hours, key, t, data = series) {
-  const now = data.base;
-  // The app asks for the headline on every frame, for the alert and the back display.
-  headline(data, now + t, 60, "en");
-  if (key !== chart.sampled) {
-    chart.sampled = key;
-    sampleColumns(data, now, hours, columns);
-  }
-  drawChart(front, key, columns, hours, 1274, t, { label: "", dry: "", stale: false });
+/** Answers of the two sources as the parsers give them: 2 hours of radar, 49 hours of model. */
+const NOWCAST = { minute: 15, levels: [] };
+for (let i = 0; i < 24; i++) NOWCAST.levels.push(i % 7 < 3 ? 90 + i : 0);
+const MODEL = { hours: { end: start, span: 3600000, levels: [] }, quarters: null };
+for (let i = 0; i < 49; i++) MODEL.hours.levels.push(i % 5 < 2 ? 100 + i : 0);
+
+/** What to show at frame `t`: `series` in a window of `hours`, an hour east of UTC. */
+function show(series, version, hours, t) {
+  return describe({ series, version, freshAt: start, now: start + t, zone: 60, hours, window: Math.round(hours), place: "Utrecht", frame: t });
+}
+
+function frontOf(what) {
+  drawFront(front, what);
   return [bitmap("front", toXpm(front), 0, 0, "front")];
 }
 
-/** What the app sends when the data or the window changes: the front, and the whole back display. */
-function everything(t) {
-  const words = headline(series, series.base, 60, "en");
-  return chart(5, "all" + t, t).concat([
-    backText("head1", words.full, 4, 4, "#FFFFFFFF"),
-    backText("head2", "Utrecht", 4, 15, "#808080FF"),
-    bitmap("map", mapXpm(series, series.base, 5 + (t % 3), "bench"), 4, 29, "back"),
-    backText("window", "Next 5 hours on the front", 4, 57, "#C8C8C8FF"),
-  ]);
-}
-
-/** The kinds of frame the app draws, and how each is made. */
+/** The kinds of frame the app draws, and how each is made. `unsent` ones time the app's own work alone. */
 const SCREENS = [
   // At rest only the shimmer moves: the picture is copied, not painted.
-  { name: "rest2h", frame: (t) => chart(2, "rest2", t) },
-  { name: "rest48h", frame: (t) => chart(48, "rest48", t) },
-  { name: "restdry", frame: (t) => chart(48, "dry48", t, dry) },
+  { name: "rest2h", frame: (t) => frontOf(show(rainy, 1, 2, t)) },
+  { name: "rest48h", frame: (t) => frontOf(show(rainy, 1, 48, t)) },
+  { name: "restdry", frame: (t) => frontOf(show(dry, 2, 48, t)) },
   // While the window slides every frame is a new picture.
-  { name: "slide", frame: (t) => chart(2 * Math.pow(1.4, t), "slide" + t, t) },
-  // New data or a turn of the wheel: both displays.
-  { name: "both", frame: (t) => everything(t) },
-  // The app's own work alone, with nothing sent: a resting frame, a frame of the slide, and joining fresh
-  // answers of the sources into a series.
-  { name: "restjs", unsent: true, frame: (t) => chart(2, "rest2", t) },
-  { name: "slidejs", unsent: true, frame: (t) => chart(2 * Math.pow(1.4, t), "js" + t, t) },
-  { name: "joinjs", unsent: true, frame: () => buildSeries(series.base, 60, NOWCAST, MODEL) },
+  { name: "slide", frame: (t) => frontOf(show(rainy, 1, 2 * Math.pow(1.4, t), t)) },
+  // New data or a settled turn of the wheel: both displays.
+  { name: "both", frame: (t) => frontOf(show(rainy, 3, 5 + (t % 3), t)).concat(backElements(show(rainy, 3, 5 + (t % 3), t))) },
+  { name: "restjs", unsent: true, frame: (t) => frontOf(show(rainy, 1, 2, t)) },
+  { name: "slidejs", unsent: true, frame: (t) => frontOf(show(rainy, 1, 3 * Math.pow(1.4, t), t)) },
+  // Joining fresh answers of the sources into a series: twice every 5 minutes.
+  { name: "joinjs", unsent: true, frame: () => buildSeries(start, NOWCAST, MODEL) },
 ];
-
-/** Answers of the two sources as the parsers give them: 2 hours of radar, 49 hours of model. */
-const NOWCAST = { minutes: 1275, levels: [] };
-for (let i = 0; i < 24; i++) NOWCAST.levels.push(i % 7 < 3 ? 90 + i : 0);
-const MODEL = { hours: { end: series.base, levels: [] }, quarters: null };
-for (let i = 0; i < 49; i++) MODEL.hours.levels.push(i % 5 < 2 ? 100 + i : 0);
 
 let total = 0;
 function run(index) {
   if (index === SCREENS.length) {
+    // The mean is of what a person sees: the frames that are sent.
     console.log("bench frame_ms " + (total / SCREENS.filter((screen) => !screen.unsent).length).toFixed(1));
     return;
   }
@@ -81,7 +69,6 @@ function run(index) {
   const step = (t) => {
     if (t === FRAMES) {
       const frame = (Date.now() - started) / FRAMES;
-      // The mean is of what a person sees: the frames that are sent.
       if (!screen.unsent) total += frame;
       console.log("bench " + screen.name + " " + frame.toFixed(1));
       setTimeout(() => run(index + 1), 0);

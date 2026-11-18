@@ -196,6 +196,132 @@ test("a failed request is tried again after a minute, not at once", async () => 
   assert.equal(bar.requests.length, 4);
 });
 
+test("without Wi-Fi it says so, asks nothing of the internet, and starts by itself when the Wi-Fi comes", async () => {
+  const bar = await launch(app, live({ wifi: "disconnected" }));
+  assert.equal(bar.requests.length, 0);
+  assert.equal(rainPixels(bar), 0);
+  assert.equal(bar.text("head2"), "The bar is not on Wi-Fi");
+  const connecting = (await launch(app, live({ wifi: "connecting" }))).front.join("");
+  await bar.advance(10 * 60000);
+  assert.equal(bar.requests.length, 0);
+  assert.equal(bar.text("head2"), "The bar is not on Wi-Fi");
+  assert.equal(bar.front.join(""), connecting, "the same words whatever the reason the Wi-Fi is not there");
+
+  bar.wifi = "connected";
+  await bar.advance(70000);
+  assert.equal(bar.text("head1"), "Drizzle in 20 minutes");
+  assert.ok(rainPixels(bar) > 0);
+});
+
+test("when the connection drops it keeps the picture, says since when, and comes back by itself", async () => {
+  const bar = await launch(app, live());
+  const asked = bar.requests.length;
+  bar.wifi = "disconnected";
+  await bar.advance(25 * 60000);
+  assert.equal(bar.requests.length, asked, "nothing is asked of the internet without Wi-Fi");
+  assert.ok(rainPixels(bar) > 0, "the rain it knew of is still shown");
+  assert.equal(bar.front[15][71], "e", "marked as old");
+  assert.equal(bar.text("window"), "No Wi-Fi. Data from 21:14");
+  assert.equal(bar.text("source"), "Buienradar + KNMI via Open-Meteo", "the credit stays");
+
+  bar.wifi = "connected";
+  await bar.advance(2 * 60000);
+  assert.equal(bar.text("window"), "Next 2 hours on the front");
+  assert.notEqual(bar.front[15][71], "e");
+});
+
+test("sources that do not answer are asked less and less often", async () => {
+  const bar = await launch(app, { at: TAKEN, radar: null, model: null });
+  const asked = [bar.requests.length];
+  // Again after 1 minute, then 2, then 4; after that the radar at its usual 5 and the model later still.
+  for (const minutes of [1.1, 2, 4, 5]) {
+    await bar.advance(minutes * 60000);
+    asked.push(bar.requests.length);
+  }
+  assert.deepEqual(asked, [2, 4, 6, 8, 9]);
+});
+
+test("data too old to trust is taken off, rather than left to say it stays dry", async () => {
+  const bar = await launch(app, live());
+  bar.wifi = "disconnected";
+  await bar.advance(3 * 3600000 + 2 * 60000);
+  assert.equal(rainPixels(bar), 0);
+  assert.equal(bar.text("head1"), "Utrecht");
+  assert.equal(bar.text("head2"), "The bar is not on Wi-Fi");
+  // Nothing of the old data is left on the back display either.
+  for (const id of ["now", "day", "window", "source"]) assert.equal(bar.text(id), " ", id);
+  assert.doesNotMatch(bar.back.map.data.split("\n").slice(-14).join(""), /[^.]/, "the strip is empty");
+});
+
+test("a radar answer from long ago is not used again when only the model answers", async () => {
+  const bar = await launch(app, live());
+  assert.equal(bar.text("source"), "Buienradar + KNMI via Open-Meteo");
+  bar.radar = null;
+  // An hour on the model is asked again and answers; the radar has failed all that time.
+  await bar.advance(62 * 60000);
+  assert.notEqual(bar.text("source"), "Buienradar + KNMI via Open-Meteo");
+  assert.notEqual(bar.text("head1"), null);
+});
+
+test("with only the radar answering it speaks of the 2 hours it knows, not of 2 days", async () => {
+  const bar = await launch(app, live({ radar: radar(0), model: null }));
+  assert.equal(bar.text("head1"), "Dry for the next 2 hours");
+  assert.match(bar.front[0], /^w[at]+$/, "at 2 hours the axis, with its hour marks, runs the whole way");
+  await bar.wheel(9);
+  await bar.advance(2500);
+  assert.equal(bar.text("window"), "Next 48 hours on the front");
+  assert.match(bar.front[0], /^w[at]*n+$/, "at 48 hours it ends where the radar does");
+  assert.equal(colours(bar).has("k"), false, "and nothing says the 48 hours are dry");
+});
+
+test("a bar that cannot say whether it is on Wi-Fi is taken to be", async () => {
+  for (const wifi of ["unknown", "undefined", "something new"]) {
+    const bar = await launch(app, live({ wifi }));
+    assert.equal(bar.requests.length, 2, wifi);
+    assert.equal(bar.text("head1"), "Drizzle in 30 minutes", wifi);
+  }
+});
+
+test("old data is marked in the headline view too", async () => {
+  const bar = await launch(app, live());
+  bar.wifi = "disconnected";
+  await bar.advance(25 * 60000);
+  await bar.press("ok");
+  assert.doesNotMatch(bar.front[0], /a/, "the headline view");
+  assert.equal(bar.front[15][71], "e");
+});
+
+test("the alert comes in the headline view as well, where nothing else changes", async () => {
+  const bar = await launch(app, live());
+  await bar.press("ok");
+  await bar.advance(17 * 60000);
+  assert.equal(bar.lights.length, 1);
+});
+
+test("an alert the bar refused is sent again, not lost", async () => {
+  const bar = await launch(app, live());
+  await bar.advance(14 * 60000);
+  bar.broken = ["display/draw"];
+  await bar.advance(4 * 60000);
+  assert.deepEqual(bar.lights, []);
+  bar.broken = [];
+  await bar.advance(3000);
+  assert.equal(bar.lights.length, 1);
+  await bar.advance(60000);
+  assert.equal(bar.lights.length, 1, "and only once");
+});
+
+test("through a long outage the sources are never asked in bursts", async () => {
+  const bar = await launch(app, { at: TAKEN, radar: null, model: null });
+  let asked = bar.requests.length;
+  for (let minute = 0; minute < 8 * 60; minute++) {
+    await bar.advance(60000);
+    assert.ok(bar.requests.length - asked <= 2, "minute " + minute + ": " + (bar.requests.length - asked) + " requests");
+    asked = bar.requests.length;
+  }
+  assert.ok(asked < 130, asked + " requests in 8 hours");
+});
+
 test("Start asks for fresh data", async () => {
   const bar = await launch(app, live());
   await bar.press("start");
@@ -205,7 +331,7 @@ test("Start asks for fresh data", async () => {
 test("outside the radar's reach the weather model stands in", async () => {
   const place = { mode: "fixed", name: "Berlin", lat: 52.52, lon: 13.4 };
   const bar = await launch(app, live({ radar: 404, settings: { place } }));
-  assert.equal(bar.text("source"), "Open-Meteo");
+  assert.equal(bar.text("source"), "KNMI via Open-Meteo");
   assert.match(bar.requests[bar.requests.length - 1], /minutely_15=precipitation/);
   assert.notEqual(bar.text("head1"), null);
   assert.deepEqual(bar.errors, []);
