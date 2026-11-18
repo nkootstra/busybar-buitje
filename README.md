@@ -43,22 +43,23 @@ The app reads its settings when it starts: start it again after a change.
 
 ## Where it works
 
-Anywhere, but it is made for the Netherlands and Belgium, and best there.
+Anywhere, with more detail in central Europe.
 
 | Where | What you get |
 |---|---|
-| The Netherlands and Belgium, and a strip across their borders (Luxembourg, Cologne, Lille) | The next 2 hours from the rain radar, in steps of 5 minutes, then KNMI's 2 km weather model for the 2 days after. |
-| The rest of central and northern Europe, up to Iceland | No radar. KNMI's 5.5 km model for all 48 hours: by the quarter for the first 3, then by the hour. |
-| The rest of the world | No radar. Whatever model Open-Meteo has for the place, by the hour. Showers are placed less precisely. |
+| The Netherlands, Belgium, Germany and the rest of central Europe, with Denmark and southern England | The next 6 hours by the quarter of an hour, then by the hour for the 2 days after. |
+| The rest of the world | All 48 hours by the hour. Showers are placed less precisely. |
 
-The app finds out by itself which of these it is in: it asks the radar, and uses the models alone when the radar says the place is out of its reach. The last line of the back display names the sources in use.
+The app finds out by itself which of the two it is in: the forecast for a place comes with quarters or without. The last line of the back display names the sources in use.
 
 ## Where the rain comes from
 
-- The next 2 hours, in steps of 5 minutes: the radar nowcast of [Buienradar](https://www.buienradar.nl).
-- The 2 days after, and everything where there is no radar: weather models through [Open-Meteo](https://open-meteo.com), KNMI's HARMONIE where it reaches.
+Weather models, through [Open-Meteo](https://open-meteo.com), in one request every quarter of an hour:
 
-Buienradar's data is free for non-commercial use with its source named; KNMI's and Open-Meteo's are under CC BY 4.0. The back display names the sources in use.
+- by the hour: KNMI's HARMONIE model where it reaches (2 km in the Netherlands and Belgium, 5.5 km in central and northern Europe), and other models elsewhere;
+- by the quarter of an hour, for the first 6 hours: ICON-D2, of Germany's weather service DWD.
+
+These are forecasts, not radar: a shower can come a little earlier or later than shown. The data is under CC BY 4.0.
 
 The bar needs Wi-Fi. Without it the app says so and waits; when the connection drops it keeps showing what it had, marked as old and with the time it is from, for up to 3 hours.
 

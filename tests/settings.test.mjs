@@ -28,7 +28,7 @@ test("the settings file's defaults are the app's own", () => {
 });
 
 test("every choice the settings file offers is one the app takes", () => {
-  for (const zoom of values(fields.zoom)) assert.equal(ZOOMS[readSettings({ zoom }).zoom], Number(zoom));
+  for (const zoom of values(fields.zoom)) assert.equal(ZOOMS[readSettings({ zoom }).zoomStep], Number(zoom));
   for (const alert of values(fields.alert)) assert.equal(readSettings({ alert }).alert, Number(alert));
   for (const language of values(fields.language)) assert.equal(readSettings({ language }).language, language);
 });

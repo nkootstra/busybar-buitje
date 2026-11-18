@@ -1,24 +1,19 @@
-// The rain data as the app has it: which source is asked when, what is done when the connection or a source
-// fails, and the series made of their latest answers.
+// The rain data as the app has it: when the forecast is asked for, what is done when the connection or the
+// service fails, and the series made of its latest answer.
 import { loadWifi } from "./bar.js";
 import { STEP_MS, buildSeries } from "./rain.js";
-import { NO_RADAR, loadModel, loadNowcast } from "./sources.js";
+import { loadForecast } from "./sources.js";
 
-/** How often the radar and the model are asked, and the model where it stands in for the radar. */
-const RADAR_MS = 5 * 60000;
-const MODEL_MS = 60 * 60000;
-const MODEL_ALONE_MS = 15 * 60000;
+/** How often the forecast is asked for: its finest values are a quarter of an hour apart. */
+const EVERY_MS = 15 * 60000;
 /**
- * After a failure a source is asked again after a minute, then 2, then 4, and so on up to its usual pace: no
- * sooner, because every request costs the bar a second and a half. Without Wi-Fi nothing is asked at all, and
- * the Wi-Fi is looked at again every minute.
+ * After a failure it is asked again after a minute, then 2, then 4, and so on up to its usual pace: no sooner,
+ * because the bar has better things to do. Without Wi-Fi nothing is asked at all, and the Wi-Fi is looked at
+ * again every minute.
  */
 const RETRY_MS = 60000;
-const MOST_DOUBLINGS = 6;
-/** A radar answer is used for this long: older, and its clock times can no longer be placed. */
-const RADAR_KEEP_MS = 15 * 60000;
-/** When the first hours count as old, and when the whole series is too old to show. */
-const STALE_MS = 20 * 60000;
+/** When the data counts as old (three answers missed), and when as too old to show. */
+const STALE_MS = 3 * EVERY_MS;
 const EXPIRED_MS = 3 * 60 * 60000;
 
 /** The states of the bar's Wi-Fi in which it has no connection. Any other answer is taken as connected. */
@@ -39,111 +34,87 @@ export const PROBLEMS = ["offline", "unreachable"];
  *   freshAt: number,
  *   poll: () => void,
  *   refresh: () => void,
+ *   stop: () => void,
  *   stale: (now: number) => boolean,
  * }}
- *   `series` is what buildSeries gives: null until a source has answered, and again once what there is has run
+ *   `series` is what buildSeries gives: null until the forecast has come, and again once what there is has run
  *   out or is too old to show. `version` counts up whenever it changes. `problem` is one of PROBLEMS when
- *   something is in the way of fresh data: the bar is not on Wi-Fi ("offline"), or it is and the source of the
- *   first hours does not answer ("unreachable"). `freshAt` is when that source last answered, 0 for never.
- *   `poll`, called on every frame, asks what is due; `refresh` makes everything due.
+ *   something is in the way of fresh data: the bar is not on Wi-Fi ("offline"), or it is and the service does
+ *   not answer ("unreachable"). `freshAt` is when the forecast last came, 0 for never. `poll`, called on every
+ *   frame, asks for it when it is due; `refresh` makes it due; after `stop` nothing more is asked.
  */
 export function createFeed(place, report) {
-  /** Each source: when it is next due, whether it is being asked, its last answer and when that came, and its failures in a row. */
-  const radar = { dueAt: 0, asking: false, answer: null, answeredAt: 0, failures: 0 };
-  const model = { dueAt: 0, asking: false, answer: null, answeredAt: 0, failures: 0 };
-  /**
-   * False once the radar has said it does not reach this place; the model's quarters then stand in for it.
-   * That answer is final for as long as the app runs: the place does not move.
-   */
-  let covered = true;
+  /** When the forecast is next due, and how many times in a row asking for it has failed. */
+  let dueAt = 0;
+  let failures = 0;
+  /** Whether the bar's Wi-Fi was down when last looked at, and whether a look or a request is under way. */
   let offline = false;
-  let checking = false;
+  let busy = false;
+  let stopped = false;
 
   const feed = {
     series: null,
     version: 0,
     freshAt: 0,
     get problem() {
-      if (offline) return "offline";
-      const first = covered ? radar : model;
-      return first.failures > 0 || (!feed.series && model.failures > 0) ? "unreachable" : null;
+      return offline ? "offline" : failures > 0 ? "unreachable" : null;
     },
     poll() {
       const now = Date.now();
       expire(now);
-      const due = [];
-      if (covered && !radar.asking && now >= radar.dueAt) due.push(radar);
-      if (!model.asking && now >= model.dueAt) due.push(model);
-      if (checking || !due.length) return;
-      checking = true;
+      if (stopped || busy || now < dueAt) return;
+      busy = true;
       loadWifi()
-        // A bar that cannot say whether it is on Wi-Fi is taken to be: the requests will tell.
+        // A bar that cannot say whether it is on Wi-Fi is taken to be: the request will tell.
         .catch((err) => {
           report(err);
           return "connected";
         })
         .then((state) => {
-          checking = false;
           offline = NOT_CONNECTED.indexOf(state) >= 0;
-          for (const source of due) {
-            if (offline) source.dueAt = Date.now() + RETRY_MS;
-            else if (source === radar) ask(radar, RADAR_MS, loadNowcast(place));
-            else ask(model, covered ? MODEL_MS : MODEL_ALONE_MS, loadModel(place, !covered));
-          }
-        });
+          if (offline) dueAt = Date.now() + RETRY_MS;
+          // Nothing is asked of the internet once the app has been told to stop.
+          else if (!stopped) return loadForecast(place).then(take);
+        })
+        // Whatever went wrong, with the request or with what was made of its answer, the feed is free again.
+        .catch(fail)
+        .then(() => (busy = false));
     },
     refresh() {
-      radar.dueAt = model.dueAt = 0;
+      dueAt = 0;
+    },
+    stop() {
+      stopped = true;
     },
     stale: (now) => feed.freshAt > 0 && now - feed.freshAt > STALE_MS,
   };
 
-  function show(series) {
+  function put(series) {
     feed.series = series;
     feed.version++;
   }
 
-  /** Takes the series off when it has nothing ahead of now any more, or nothing has answered for too long. */
+  /** Takes the series off when it has nothing ahead of now any more, or the forecast has not come for too long. */
   function expire(now) {
     const series = feed.series;
     if (!series) return;
-    const ranOut = now >= series.base + series.known * STEP_MS;
-    if (ranOut || now - Math.max(radar.answeredAt, model.answeredAt) > EXPIRED_MS) show(null);
+    if (now >= series.base + series.known * STEP_MS || now - feed.freshAt > EXPIRED_MS) put(null);
   }
 
-  /** Makes the series anew from the latest answers. */
-  function join(now) {
-    const nowcast = covered && now - radar.answeredAt < RADAR_KEEP_MS ? radar.answer : null;
-    feed.freshAt = nowcast ? radar.answeredAt : model.answeredAt;
-    show(buildSeries(now, nowcast, model.answer));
+  function take(forecast) {
+    const now = Date.now();
+    failures = 0;
+    dueAt = now + EVERY_MS;
+    feed.freshAt = now;
+    put(buildSeries(now, forecast));
   }
 
-  /** Takes a source's answer when it comes; a failure keeps what there is. */
-  function ask(source, every, request) {
-    source.asking = true;
-    source.dueAt = Date.now() + every;
-    request
-      .then(
-        (answer) => {
-          const now = Date.now();
-          source.failures = 0;
-          if (answer === NO_RADAR) {
-            // Ask the model again at once, for its quarters.
-            covered = false;
-            model.dueAt = 0;
-          } else {
-            source.answer = answer;
-            source.answeredAt = now;
-          }
-          join(now);
-        },
-        (err) => {
-          report(err);
-          source.dueAt = Date.now() + Math.min(every, RETRY_MS * Math.pow(2, Math.min(source.failures, MOST_DOUBLINGS)));
-          source.failures++;
-        },
-      )
-      .then(() => (source.asking = false));
+  /** A failure keeps what there is. */
+  function fail(err) {
+    report(err);
+    // Doubling stops well before the number would outgrow what the bar counts in.
+    dueAt = Date.now() + Math.min(EVERY_MS, RETRY_MS * Math.pow(2, Math.min(failures, 6)));
+    failures++;
   }
 
   return feed;

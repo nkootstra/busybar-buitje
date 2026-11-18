@@ -1,8 +1,10 @@
-// The rain ahead as one series: 48 hours in steps of 5 minutes, from the radar nowcast and the weather model.
+// The rain ahead as one series: 48 hours in steps of 5 minutes, made from a forecast by the hour and, where
+// there is one, a finer forecast by the quarter for the first hours.
 //
 // Everything is kept as a "level", a whole number from 0 to 255 on a logarithmic scale: 0 is dry and
-// 10^((level - 109) / 32) is the rain in mm an hour. That is the scale the radar feed uses, and it lets the
-// drawing compare whole numbers instead of computing with fractions on every frame, which the bar is slow at.
+// 10^((level - 109) / 32) is the rain in mm an hour. A byte holds drizzle and cloudbursts alike that way, and
+// the drawing can compare whole numbers instead of computing with fractions on every frame, which the bar is
+// slow at.
 
 /** How far ahead the app looks, the length of one step of the series, and how many steps that makes. */
 export const HOURS = 48;
@@ -16,8 +18,7 @@ export const HEAVY = 129;
 /** Fainter than rain you would notice, but still drawn: the edge of a shower. */
 export const FAINT = WET - 7;
 
-/** The radar nowcast reaches 2 hours; over the hour after it the series fades into the model. */
-const NOWCAST_STEPS = 24;
+/** Where the quarters end the series takes an hour to fade from them into the hours. */
 const FADE_STEPS = 12;
 
 /** Rain in mm an hour as a level. */
@@ -44,64 +45,41 @@ function fillFrom(block, base, levels) {
   const stepAt = (at) => Math.max(0, Math.min(STEPS, Math.ceil((at - base - STEP_MS / 2) / STEP_MS)));
   let end = 0;
   for (let k = 0; k < block.levels.length; k++) {
-    const from = stepAt(block.end + (k - 1) * block.span);
-    end = stepAt(block.end + k * block.span);
+    const from = stepAt(block.firstEnds + (k - 1) * block.span);
+    end = stepAt(block.firstEnds + k * block.span);
     if (end > from) levels.fill(block.levels[k], from, end);
   }
   return end;
 }
 
 /**
- * Joins the sources into one series that starts at the 5-minute step `now` falls in.
+ * Makes a forecast into one series that starts at the 5-minute step `now` falls in.
  *
  * @param {number} now - the moment, in ms.
- * @param {{ minute: number, levels: number[] } | null} nowcast - the radar's levels, 5 minutes apart, and the
- *   minute of the hour of the first; null where there is no radar.
- * @param {{ hours: object, quarters: object | null } | null} model - levels by the hour and by the quarter,
- *   each a block { end, span, levels }: every value covers the `span` ms before its time, and `end` is the
- *   first value's time, in ms.
- * @returns {{ base: number, levels: Uint8Array, known: number, radar: boolean } | null}
+ * @param {{ hours: object, quarters: object | null } | null} forecast - levels by the hour and, where the finer
+ *   model reaches, by the quarter. Each is a block { firstEnds, span, levels }: every value covers the `span` ms
+ *   before its time, and `firstEnds` is the first value's time, in ms.
+ * @returns {{ base: number, levels: Uint8Array, known: number, fine: boolean } | null}
  *   `levels` has a level for each step from `base` on. Only the first `known` of them are known: past that the
- *   sources said nothing, which is not the same as dry. `radar` is whether the first hours are the radar's.
- *   Null when there is nothing to show.
+ *   forecast said nothing, which is not the same as dry. `fine` is whether the first hours are by the quarter.
+ *   Null when there is no forecast.
  */
-export function buildSeries(now, nowcast, model) {
-  if (!nowcast && !model) return null;
+export function buildSeries(now, forecast) {
+  if (!forecast) return null;
   const base = Math.floor(now / STEP_MS) * STEP_MS;
   const levels = new Uint8Array(STEPS);
-  let known = 0;
-
-  if (model) {
-    known = fillFrom(model.hours, base, levels);
-    // Without radar the model's quarters are the finer picture of the first hours.
-    if (model.quarters && !nowcast) known = Math.max(known, fillFrom(model.quarters, base, levels));
-  }
-
-  if (nowcast) {
-    // The radar's first line is within a few steps of now, so the minute of the hour places it; and since the
-    // minute is the same in every zone a whole number of hours apart, the bar's own zone does not come into it.
-    const baseMinute = Math.floor(base / 60000) % 60;
-    const first = Math.round((((nowcast.minute - baseMinute + 90) % 60) - 30) / 5);
-    let last = -1;
-    for (let i = 0; i < nowcast.levels.length && i < NOWCAST_STEPS + 2; i++) {
-      const step = first + i;
-      if (step < 0 || step >= STEPS) continue;
-      levels[step] = nowcast.levels[i];
-      last = step;
+  let known = fillFrom(forecast.hours, base, levels);
+  const quartersEnd = forecast.quarters ? fillFrom(forecast.quarters, base, levels) : 0;
+  // The two models seldom agree where the quarters end: fade from the one into the other.
+  if (quartersEnd > 0 && quartersEnd < known) {
+    const from = levels[quartersEnd - 1];
+    for (let k = 0; k < FADE_STEPS && quartersEnd + k < known; k++) {
+      const to = levels[quartersEnd + k];
+      levels[quartersEnd + k] = Math.round(from + ((to - from) * (k + 1)) / (FADE_STEPS + 1));
     }
-    // Radar and model seldom agree at the seam: fade from the one into the other.
-    if (last >= 0 && last + 1 < known) {
-      const from = levels[last];
-      for (let k = 1; k <= FADE_STEPS && last + k < known; k++) {
-        const to = levels[last + k];
-        levels[last + k] = Math.round(from + ((to - from) * k) / (FADE_STEPS + 1));
-      }
-    }
-    // The radar may start a step ahead of now: the steps before it are as the first one.
-    for (let step = 0; step < first && step < STEPS; step++) levels[step] = nowcast.levels[0];
-    known = Math.max(known, last + 1);
   }
-  return { base, levels, known, radar: !!nowcast };
+  known = Math.max(known, quartersEnd);
+  return { base, levels, known, fine: quartersEnd > 0 };
 }
 
 /**

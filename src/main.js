@@ -69,9 +69,9 @@ function showAt(now) {
   });
 }
 
-/** Warns once when rain is about to start: the status light, and a sound if wanted. */
-function watch(show) {
-  if (!settings.alert || !show.words) return;
+/** Warns once when rain is about to start: the status light, and a sound if wanted. Not on the word of old data. */
+function warnOfRain(show) {
+  if (!settings.alert || !show.words || show.stale) return;
   const startsIn = show.words.startsIn;
   if (startsIn < 0 || startsIn > settings.alert) return;
   if (alertedAt && show.now - alertedAt < ALERT_REST_MS) return;
@@ -83,8 +83,9 @@ function watch(show) {
 /** The elements that differ from what the displays show. */
 function frame(now) {
   const show = showAt(now);
-  watch(show);
-  // The status light blinks with a frame: when it is due and nothing changed, the front goes out again.
+  warnOfRain(show);
+  // The status light blinks only with a frame: when a blink is due and nothing changed, the front display is
+  // sent once more as it is.
   return screen.changes(show, !zoom.sliding(now), !!light);
 }
 
@@ -111,16 +112,20 @@ function tick() {
     zoneAt = started;
     loadZone().then((minutes) => (zone = minutes), report);
   }
-  feed.poll();
-  zoom.rest(started);
-
   let pending = null;
-  if (!sending) {
-    const elements = frame(started);
-    if (elements.length) {
-      sending = true;
-      pending = send(elements).then(() => (sending = false));
+  // Whatever goes wrong in one frame, the next one is still made: a display that froze would be worse.
+  try {
+    feed.poll();
+    zoom.rest(started);
+    if (!sending) {
+      const elements = frame(started);
+      if (elements.length) {
+        sending = true;
+        pending = send(elements).then(() => (sending = false));
+      }
     }
+  } catch (err) {
+    report(err);
   }
   const schedule = () => {
     if (stopped) return;
@@ -133,7 +138,7 @@ function tick() {
   else schedule();
 }
 
-/** Brings the next frame forward: a turn of the wheel should not wait out the slow half second. */
+/** Brings the next frame forward: a button or the wheel should not wait out the slow half second. */
 function wake() {
   if (!timer) return;
   clearTimeout(timer);
@@ -143,6 +148,7 @@ function wake() {
 function quit() {
   stopped = true;
   if (timer) clearTimeout(timer);
+  if (feed) feed.stop();
   // The listener is the last thing keeping the app alive: let this handler return before it goes.
   setTimeout(() => unbind && unbind(), 0);
 }
@@ -155,10 +161,11 @@ function onInput(event) {
   if (event.key === "encoder") {
     inWords = false;
     zoom.turn(event.delta, Date.now());
-    wake();
   } else if (event.action !== "short") return;
   else if (event.key === "ok") inWords = !inWords;
   else if (event.key === "start") feed.refresh();
+  else return;
+  wake();
 }
 
 function main() {
@@ -179,7 +186,7 @@ function main() {
     zone = minutes;
     zoneAt = Date.now();
     feed = createFeed(settings.place, report);
-    zoom = createZoom(settings.zoom);
+    zoom = createZoom(settings.zoomStep);
     tick();
   }, report);
 }

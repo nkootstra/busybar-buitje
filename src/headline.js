@@ -20,16 +20,20 @@ function rounded(minutes) {
   return Math.round(minutes / 60) * 60;
 }
 
-/** A rounded length of time in a sentence: "45 minutes", "1.5 hours". */
-function spoken(minutes, words) {
-  if (minutes < IN_HOURS_FROM) return minutes + words.minutes;
+/** A rounded number of minutes as hours: "2", "1.5". */
+function inHours(minutes) {
   const hours = minutes / 60;
-  return (hours % 1 ? hours.toFixed(1) : String(hours)) + (hours === 1 ? words.hour : words.hours);
+  return hours % 1 ? hours.toFixed(1) : String(hours);
 }
 
-/** A rounded length of time on the front display: "45 MIN", "2 HRS". */
+/** A rounded length of time in a sentence: "45 minutes", "1.5 hours". */
+function spoken(minutes, words) {
+  return minutes < IN_HOURS_FROM ? minutes + words.minutes : inHours(minutes) + words.hours;
+}
+
+/** The same length on the front display: "45 MIN", "1.5 HRS". */
 function short(minutes, words) {
-  return minutes < IN_HOURS_FROM ? minutes + words.front.min : Math.round(minutes / 60) + words.front.hrs;
+  return minutes < IN_HOURS_FROM ? minutes + words.front.min : inHours(minutes) + words.front.hrs;
 }
 
 /** The last headline made, and what it was made for. */

@@ -15,7 +15,7 @@ const en = {
   // The back display.
   waiting: "Asking for the rain...",
   problemLine: { offline: "The bar is not on Wi-Fi", unreachable: "No rain data. Start: try again" },
-  // Under old data, in place of the sources: what is wrong, and when the data is from.
+  // Under old data, where the window's name stood: what is wrong, and when the data is from.
   dataFrom: { offline: (time) => "No Wi-Fi. Data from " + time, unreachable: (time) => "No answer. Data from " + time },
   windowOnFront: (hours) => "Next " + hours + (hours === 1 ? " hour" : " hours") + " on the front",
   now: "now",
@@ -34,7 +34,6 @@ const en = {
     twoDays: "2 days",
     days: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
     minutes: " minutes",
-    hour: " hour",
     hours: " hours",
     front: { dry: "DRY", dryUntil: "DRY TILL", coming: " IN", min: " MIN", hrs: " HRS", twoDays: "2 DAYS" },
   },
@@ -64,7 +63,6 @@ const nl = {
     twoDays: "2 dagen",
     days: ["zondag", "maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag"],
     minutes: " minuten",
-    hour: " uur",
     hours: " uur",
     front: { dry: "DROOG", dryUntil: "DROOG TOT", coming: " OVER", min: " MIN", hrs: " UUR", twoDays: "2 DAGEN" },
   },
@@ -79,7 +77,7 @@ export function clock(at, zone) {
   return Math.floor(minutes / 60) + ":" + (m < 10 ? "0" : "") + m;
 }
 
-/** Letters with a mark the bar cannot show, by the plain letter that stands in for them. */
+/** Letters the bar cannot show, by the plain letters that stand in for them. */
 const UNMARKED = {
   a: "àáâãäå",
   c: "ç",
@@ -97,6 +95,13 @@ const UNMARKED = {
   O: "ÒÓÔÕÖØ",
   U: "ÙÚÛÜ",
   Y: "Ý",
+  ss: "ß",
+  ae: "æ",
+  oe: "œ",
+  l: "ł",
+  Ae: "Æ",
+  Oe: "Œ",
+  L: "Ł",
   "'": "‘’",
   "-": "–—",
 };

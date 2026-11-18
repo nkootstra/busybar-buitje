@@ -1,6 +1,6 @@
 // Writes previews/screens.png: the front display at several windows and in words, and the back display's strip,
-// drawn by the app's own functions from the fixtures in tests/fixtures, enlarged, to look at while drawing.
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+// drawn by the app's own functions for the evening the tests share, enlarged, to look at while drawing.
+import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { backElements } from "../src/back.js";
@@ -8,16 +8,15 @@ import { PALETTE } from "../src/canvas.js";
 import { createFront, drawFront } from "../src/front.js";
 import { buildSeries } from "../src/rain.js";
 import { describe } from "../src/show.js";
-import { parseModel, parseNowcast } from "../src/sources.js";
+import { parseForecast } from "../src/sources.js";
+import { AT as now, EVENING } from "../tests/forecast.mjs";
 import { encodePng } from "./png.mjs";
 import { xpmRows } from "./sim.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const fixture = (name) => readFileSync(resolve(root, "tests/fixtures", name), "utf8");
-const now = Number(fixture("taken-at.txt")) * 1000;
-const series = buildSeries(now, parseNowcast(fixture("raintext-amsterdam.txt")), parseModel(JSON.parse(fixture("model-amsterdam.json"))));
+const series = buildSeries(now, parseForecast(EVENING));
 
-/** What to show: the fixtures' rain at the moment they were taken, an hour east of UTC. */
+/** What to show: that evening's rain at 21:14, an hour east of UTC. */
 const show = (fields) => describe({ series, version: 1, freshAt: now, now, zone: 60, place: "Utrecht", frame: 3, ...fields });
 
 const SCALE = 5;

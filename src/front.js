@@ -32,8 +32,8 @@ const EMPTY = [];
 for (let i = 0; i < W * H; i++) EMPTY.push(i < W ? "a" : "n");
 
 /**
- * The picture on show, painted once and copied into every frame after: a copy costs the bar far less than
- * painting it again. `picture.of` names what it shows; the rest is what the frames drawn over it need to know.
+ * The picture on show, painted once: painting it again for every frame would cost the bar ten times a frame's
+ * worth. `picture.of` names what it shows; the rest is what the frames drawn over it need to know.
  */
 const picture = {
   of: "",

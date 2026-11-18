@@ -22,7 +22,7 @@ if (!existsSync(emulator)) throw new Error("BUSY Bar Emulator's command line is 
 rmSync(work, { recursive: true, force: true });
 mkdirSync(work);
 cpSync(join(root, "src"), join(work, "src"), { recursive: true });
-cpSync(join(root, "tools/bench-app.js"), join(work, "src/main.js"));
+cpSync(join(root, "tools/bench/main.js"), join(work, "src/main.js"));
 rmSync(join(work, "src/appmeta/settings.json"), { force: true });
 const manifest = JSON.parse(readFileSync(join(root, "src/appmeta/manifest.json"), "utf8"));
 /** The benchmark is an app of its own on the bar, beside the real one. */

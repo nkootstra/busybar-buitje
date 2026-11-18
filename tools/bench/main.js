@@ -1,6 +1,8 @@
 // The app the benchmark runs on the bar: it makes and sends frames through the same screen.js Buitje itself
-// uses, with rain made up here instead of fetched, and logs how long a frame takes. tools/bench.mjs builds it
-// next to the real sources, under an id of its own, and reads the log.
+// uses, with rain made up here instead of fetched, and logs how long a frame takes.
+//
+// This file is not run from here. tools/bench.mjs copies src/ aside, puts this file in as its main.js, builds
+// that as an app of its own and reads its log: the imports below are of the modules it then sits among.
 import manifest from "./appmeta/manifest.json";
 import { draw } from "./bar.js";
 import { STEPS, buildSeries } from "./rain.js";
@@ -13,21 +15,20 @@ const screen = createScreen();
 const start = Date.now();
 
 /** Two days with a fair amount of rain in them: showers of every strength, and dry spells between. */
-const rainy = { base: start, levels: new Uint8Array(STEPS), known: STEPS, radar: true };
+const rainy = { base: start, levels: new Uint8Array(STEPS), known: STEPS, fine: true };
 for (let i = 0; i < STEPS; i++) {
   const wave = (i * 7) % 96;
   rainy.levels[i] = wave < 40 ? 75 + ((wave * 3 + i) % 70) : 0;
 }
 
 /** Two dry days with one shower at the very end: the headline has to look all the way to find it. */
-const dry = { base: start, levels: new Uint8Array(STEPS), known: STEPS, radar: true };
+const dry = { base: start, levels: new Uint8Array(STEPS), known: STEPS, fine: true };
 dry.levels.fill(110, STEPS - 6);
 
-/** Answers of the two sources as the parsers give them: 2 hours of radar, 49 hours of model. */
-const NOWCAST = { minute: 15, levels: [] };
-for (let i = 0; i < 24; i++) NOWCAST.levels.push(i % 7 < 3 ? 90 + i : 0);
-const MODEL = { hours: { end: start, span: 3600000, levels: [] }, quarters: null };
-for (let i = 0; i < 49; i++) MODEL.hours.levels.push(i % 5 < 2 ? 100 + i : 0);
+/** A forecast as the parser gives it: 49 hours, and the first 6 of them by the quarter. */
+const FORECAST = { hours: { firstEnds: start, span: 3600000, levels: [] }, quarters: { firstEnds: start, span: 900000, levels: [] } };
+for (let i = 0; i < 49; i++) FORECAST.hours.levels.push(i % 5 < 2 ? 100 + i : 0);
+for (let i = 0; i < 24; i++) FORECAST.quarters.levels.push(i % 7 < 3 ? 90 + i : 0);
 
 /** What to show at frame `t`: `series` in a window of `hours`, an hour east of UTC. */
 function show(series, version, hours, t, labelled) {
@@ -53,8 +54,8 @@ const SCREENS = [
   { name: "both", frame: (t) => screen.changes(show(rainy, 10 + t, 5, t), true, false) },
   { name: "restjs", unsent: true, frame: (t) => screen.changes(show(rainy, 1, 2, t), true, false) },
   { name: "slidejs", unsent: true, frame: (t) => screen.changes(show(rainy, 1, 3 * Math.pow(1.4, t), t, true), false, false) },
-  // Joining fresh answers of the sources into a series: twice every 5 minutes.
-  { name: "joinjs", unsent: true, frame: () => buildSeries(start, NOWCAST, MODEL) },
+  // Making a fresh forecast into a series: every quarter of an hour.
+  { name: "joinjs", unsent: true, frame: () => buildSeries(start, FORECAST) },
 ];
 
 let total = 0;

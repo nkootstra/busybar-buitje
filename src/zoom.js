@@ -2,7 +2,7 @@
 // the next, and left alone it goes back to the length it started with.
 
 /**
- * The lengths the wheel steps through, in hours. At 2 hours a step of the radar is exactly 3 columns. The
+ * The lengths the wheel steps through, in hours. At 2 hours a quarter of an hour is exactly 9 columns. The
  * `zoom` setting in src/appmeta/settings.json offers the same lengths; a test holds the two together.
  */
 export const ZOOMS = [1, 2, 3, 5, 9, 12, 18, 24, 36, 48];

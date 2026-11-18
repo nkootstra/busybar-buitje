@@ -1,5 +1,5 @@
 // A pretend BUSY Bar for tests: runs the built app (dist/*.tgz) with the bar's globals replaced by fakes,
-// a clock that only moves when a test says so, and the two rain sources answering from what the test gives.
+// a clock that only moves when a test says so, and the forecast service answering what the test gives.
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -9,8 +9,7 @@ import { bundle } from "./bundle.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const API = "http://localhost/api/";
-const RADAR = "https://gpsgadget.buienradar.nl/";
-const MODEL = "http://api.open-meteo.com/";
+const FORECAST = "http://api.open-meteo.com/";
 const flush = () => new Promise((done) => setImmediate(done));
 
 /**
@@ -47,9 +46,8 @@ export function xpmRows(data) {
  * @param {number} [options.offsetMin] - the bar's zone, minutes east of UTC.
  * @param {object} [options.settings] - values of the app's settings.
  * @param {string} [options.wifi] - the state of the bar's Wi-Fi; "connected" unless given.
- * @param {string | number | null} [options.radar] - what the radar answers: its text, an HTTP status, or null
- *   for a request that fails.
- * @param {object | number | null} [options.model] - what the model answers: its JSON, an HTTP status, or null.
+ * @param {object | string | number | null} [options.forecast] - what the forecast service answers: its JSON,
+ *   some other text, an HTTP status, or null for a request that fails.
  */
 export async function launch(code, options = {}) {
   const { at = Date.UTC(2026, 10, 17, 20, 14), offsetMin = 60, settings = {} } = options;
@@ -72,12 +70,15 @@ export async function launch(code, options = {}) {
     settings: { ...settings },
     /** The state of the bar's Wi-Fi; a test may change it while the app runs. */
     wifi: options.wifi || "connected",
-    /** What the sources answer; a test may change them while the app runs. */
-    radar: options.radar === undefined ? null : options.radar,
-    model: options.model === undefined ? null : options.model,
+    /** What the forecast service answers; a test may change it while the app runs. */
+    forecast: options.forecast === undefined ? null : options.forecast,
     /** Calls of the bar's own API that answer 500, by the start of their path; a test may change them. */
     broken: options.broken || [],
     handler: null,
+    /** The bar's clock, in ms. */
+    get now() {
+      return now;
+    },
     /** Sets the bar's clock `ms` on, or back; timers keep the time they had left. */
     jump(ms) {
       now += ms;
@@ -138,23 +139,19 @@ export async function launch(code, options = {}) {
       json: () => Promise.resolve().then(() => JSON.parse(text)),
     });
   };
-  /** A source's answer: a number is an HTTP status, null a request that fails, anything else the body. */
-  const answer = (source) => {
-    if (source === null) return Promise.reject(new Error("Inactivity timeout"));
-    if (typeof source === "number") return reply(source, "Not found");
-    return reply(200, source);
+  /** The service's answer: a number is an HTTP status, null a request that fails, anything else the body. */
+  const answer = (given) => {
+    if (given === null) return Promise.reject(new Error("Inactivity timeout"));
+    if (typeof given === "number") return reply(given, "Not found");
+    return reply(200, given);
   };
 
   const fetch = (url, init = {}) => {
     url = String(url);
     const method = init.method || "GET";
-    if (url.startsWith(RADAR)) {
+    if (url.startsWith(FORECAST)) {
       bar.requests.push(url);
-      return answer(bar.radar);
-    }
-    if (url.startsWith(MODEL)) {
-      bar.requests.push(url);
-      return answer(bar.model);
+      return answer(bar.forecast);
     }
     if (!url.startsWith(API)) return Promise.reject(new Error("no network: " + url));
     const path = url.slice(API.length);

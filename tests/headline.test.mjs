@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { textWidth } from "../src/canvas.js";
 import { headline } from "../src/headline.js";
 import { STEPS, levelOf } from "../src/rain.js";
 
@@ -34,6 +35,7 @@ test("lengths are rounded the way people say them", () => {
   assert.equal(say(rain([0, 1, 1])).full, "Rain for about 5 minutes");
   assert.equal(say(rain([0, 17, 1])).full, "Rain for about 85 minutes");
   assert.equal(say(rain([0, 19, 1])).full, "Rain for about 1.5 hours");
+  assert.equal(say(rain([0, 19, 1])).bottom, "1.5 HRS", "the front says the same as the back");
   assert.equal(say(rain([0, 25, 1])).full, "Rain for about 2 hours");
   assert.equal(say(rain([0, 25, 1])).bottom, "2 HRS");
   assert.equal(say(rain([0, 100, 1])).full, "Rain for about 8 hours");
@@ -75,14 +77,14 @@ test("dry for the two days", () => {
 });
 
 test("it speaks only of what the forecast covers: with 2 hours known, not of 2 days", () => {
-  const radarOnly = (series) => ({ ...series, known: 24 });
-  const dry = say(radarOnly(rain()));
+  const twoHoursKnown = (series) => ({ ...series, known: 24 });
+  const dry = say(twoHoursKnown(rain()));
   assert.equal(dry.full, "Dry for the next 2 hours");
   assert.equal(dry.bottom, "2 HRS");
-  assert.equal(say(radarOnly(rain([0, STEPS, 1]))).full, "Rain for the next 2 hours");
-  assert.equal(say(radarOnly(rain()), "nl").full, "Droog de komende 2 uur");
+  assert.equal(say(twoHoursKnown(rain([0, STEPS, 1]))).full, "Rain for the next 2 hours");
+  assert.equal(say(twoHoursKnown(rain()), "nl").full, "Droog de komende 2 uur");
   // Rain that the forecast does not reach is not seen.
-  assert.equal(say(radarOnly(rain([30, 6, 9]))).full, "Dry for the next 2 hours");
+  assert.equal(say(twoHoursKnown(rain([30, 6, 9]))).full, "Dry for the next 2 hours");
   // The model's last hour comes and goes: a little short of 48 hours still counts as 2 days.
   assert.equal(say({ ...rain(), known: STEPS - 12 }).full, "Dry for the next 2 days");
 });
@@ -118,10 +120,10 @@ test("every headline fits the displays", () => {
     for (const series of cases) {
       const words = say(series, language);
       for (const part of [words.full, words.top, words.bottom]) assert.match(part, /^[\x20-\x7e]+$/);
-      // Two lines of 34 characters on the back; 13 letters of the small font on the front.
+      // Two lines of 34 characters on the back; on the front the 58 pixels right of the drop.
       assert.ok(words.full.length <= 68, words.full);
-      assert.ok(words.top.length <= 13, words.top);
-      assert.ok(words.bottom.length <= 13, words.bottom);
+      assert.ok(textWidth(words.top) <= 58, words.top);
+      assert.ok(textWidth(words.bottom) <= 58, words.bottom);
     }
   }
 });

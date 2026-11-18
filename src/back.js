@@ -85,11 +85,11 @@ function emptyStripXpm() {
   return rows.join("\n");
 }
 
-/** A sentence over at most two lines. */
+/** A sentence over at most two lines, broken at a space where there is one. */
 function wrap(sentence) {
   if (sentence.length <= LINE) return [sentence, ""];
-  const cut = sentence.lastIndexOf(" ", LINE);
-  return [sentence.slice(0, cut), sentence.slice(cut + 1)];
+  const space = sentence.lastIndexOf(" ", LINE);
+  return space > 0 ? [sentence.slice(0, space), sentence.slice(space + 1)] : [sentence.slice(0, LINE), sentence.slice(LINE)];
 }
 
 /**
@@ -138,6 +138,6 @@ export function backElements(show) {
     line("now", midnight > LEFT + 24 ? texts.now : "", ROW.days, GREY),
     line("day", texts.tomorrow, ROW.days, GREY, midnight),
     line("window", trouble || texts.windowOnFront(show.window), ROW.window, LIGHT),
-    line("source", show.series.radar ? CREDIT.radar : CREDIT.model, ROW.credit, GREY),
+    line("source", show.series.fine ? CREDIT.fine : CREDIT.coarse, ROW.credit, GREY),
   ];
 }
