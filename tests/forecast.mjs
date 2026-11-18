@@ -42,7 +42,7 @@ export const of = (count, mm) => new Array(count).fill(mm);
  */
 export const EVENING = forecast({
   quarters: [...of(3, 0), ...of(3, 0.075), ...of(2, 0), ...of(4, 0.5), ...of(12, 0)],
-  hours: [0.2, 0.1, 2, ...of(3, 0), ...of(4, 1.5), ...of(38, 0)],
+  hours: [0, 0, 2, ...of(3, 0), ...of(4, 1.5), ...of(38, 0)],
 });
 
 /** Two days without rain. */

@@ -59,6 +59,8 @@ Weather models, through [Open-Meteo](https://open-meteo.com), in one request eve
 - by the hour: KNMI's HARMONIE model where it reaches (2 km in the Netherlands and Belgium, 5.5 km in central and northern Europe), and other models elsewhere;
 - by the quarter of an hour, for the first 6 hours: ICON-D2, of Germany's weather service DWD.
 
+The two models often disagree about the first hours. The app then shows the stronger rain of the two: rain that is shown and does not come costs less than rain that comes unannounced.
+
 These are forecasts, not radar: a shower can come earlier or later than shown, and a small one can be missed. That goes for the rain alert too. The data is under CC BY 4.0.
 
 The bar needs Wi-Fi. Without it the app says so and waits; when the connection drops it keeps showing what it had, marked as old and with the time it is from, for up to 3 hours.

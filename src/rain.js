@@ -38,16 +38,19 @@ export function reachOf(level, rows) {
 
 /**
  * Writes a block of values, each covering the `span` ms before its time, into the steps of a series that
- * starts at `base`: a step takes the value its middle falls in. Returns the step after the last one written.
+ * starts at `base`: a step takes the value its middle falls in, or with `over` keeps its own when that is
+ * the stronger rain. Returns the step after the last one written.
  */
-function fillFrom(block, base, levels) {
+function fillFrom(block, base, levels, over) {
   // The step whose middle is the first at or after moment `at`.
   const stepAt = (at) => Math.max(0, Math.min(STEPS, Math.ceil((at - base - STEP_MS / 2) / STEP_MS)));
   let end = 0;
   for (let k = 0; k < block.levels.length; k++) {
     const from = stepAt(block.firstEnds + (k - 1) * block.span);
     end = stepAt(block.firstEnds + k * block.span);
-    if (end > from) levels.fill(block.levels[k], from, end);
+    const level = block.levels[k];
+    if (!over) levels.fill(level, from, end);
+    else for (let i = from; i < end; i++) if (level > levels[i]) levels[i] = level;
   }
   return end;
 }
@@ -61,21 +64,24 @@ function fillFrom(block, base, levels) {
  *   before its time, and `firstEnds` is the first value's time, in ms.
  * @returns {{ base: number, levels: Uint8Array, known: number, fine: boolean } | null}
  *   `levels` has a level for each step from `base` on. Only the first `known` of them are known: past that the
- *   forecast said nothing, which is not the same as dry. `fine` is whether the first hours are by the quarter.
+ *   forecast said nothing, which is not the same as dry. `fine` is whether the first hours have the finer
+ *   model's quarters in them.
  *   Null when there is no forecast.
  */
 export function buildSeries(now, forecast) {
   if (!forecast) return null;
   const base = Math.floor(now / STEP_MS) * STEP_MS;
   const levels = new Uint8Array(STEPS);
-  let known = fillFrom(forecast.hours, base, levels);
-  const quartersEnd = forecast.quarters ? fillFrom(forecast.quarters, base, levels) : 0;
-  // The two models seldom agree where the quarters end: fade from the one into the other.
+  let known = fillFrom(forecast.hours, base, levels, false);
+  // The two models often disagree, and neither is always right: a step shows the stronger rain of the two.
+  // Rain that is shown and does not come costs less than rain that comes unannounced.
+  const quartersEnd = forecast.quarters ? fillFrom(forecast.quarters, base, levels, true) : 0;
+  // Where the quarters end, rain only they had fades out rather than stops at a line.
   if (quartersEnd > 0 && quartersEnd < known) {
     const from = levels[quartersEnd - 1];
     for (let k = 0; k < FADE_STEPS && quartersEnd + k < known; k++) {
       const to = levels[quartersEnd + k];
-      levels[quartersEnd + k] = Math.round(from + ((to - from) * (k + 1)) / (FADE_STEPS + 1));
+      if (from > to) levels[quartersEnd + k] = Math.round(from + ((to - from) * (k + 1)) / (FADE_STEPS + 1));
     }
   }
   known = Math.max(known, quartersEnd);

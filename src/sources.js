@@ -13,7 +13,7 @@ const FORECAST = "http://api.open-meteo.com/v1/forecast";
  *
  * `icon_d2`, of Germany's DWD, has rain by the quarter of an hour: real values, where KNMI's quarters are its
  * hours cut in four. It reaches central Europe, the Netherlands, Belgium, Denmark and southern England among
- * it, and gives the app its finer first hours there.
+ * it, and gives the app its finer first hours there. It does not replace the hours: see buildSeries.
  */
 const BY_THE_HOUR = "knmi_seamless";
 const BY_THE_QUARTER = "icon_d2";

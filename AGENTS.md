@@ -41,6 +41,7 @@ One request to Open-Meteo, over plain HTTP (a TLS handshake takes the bar 1.5 s)
 - **`icon_d2`, by the quarter of an hour**, 24 values: DWD's model for central Europe. Its quarters are real; KNMI's are its hours cut in four, which is why the app does not use them. Utrecht, Brussels, Berlin, Copenhagen and London had them; Madrid, New York and Tokyo did not.
 - **The answer says which it is.** Where both models reach, every value is named after its model (`precipitation_icon_d2`). Where only one does, the values are plain `precipitation`: that model's hours, also under the quarters, which are then not taken.
 - A value is the rain of the hour, or the quarter, *before* its time.
+- **Where the two models disagree, a step shows the stronger rain of the two** (`buildSeries` in `rain.js`). The quarters do not replace the hours: on 18 November 2026 KNMI had drizzle over Borne for two hours where ICON-D2 had none, and the app, which then let the quarters win, called it dry. Rain shown that does not come costs less than rain that comes unannounced.
 - **A list stops at its first missing value.** What follows a gap is not taken: the gap would read as dry.
 - **A series knows how far it reaches** (`known`). Past that the forecast said nothing, which is not the same as dry: the headline speaks only of what is known ("Dry for the next 3 hours"), the timeline's axis ends there, and the back strip is dark past it. Keep it that way in anything that reads a series.
 - Keep the credit line on the back display. It is the attribution the data's licence (CC BY 4.0) asks for.
@@ -68,7 +69,7 @@ Measured on BUSY Bar Emulator, which runs apps at the bar's speed (firmware 1.3.
 | Resting: only the rain shimmers | 50 ms |
 | The window sliding, with its name on show | 119 ms |
 | Both displays whole, when new data has come | 212 ms |
-| Making a series of a fresh forecast, every quarter of an hour | 25 ms |
+| Making a series of a fresh forecast, every quarter of an hour | 28 ms |
 
 Sending the front display takes the bar about 45 ms of each, whatever the app does. A frame of the slide must stay under 125 ms for 8 frames a second.
 

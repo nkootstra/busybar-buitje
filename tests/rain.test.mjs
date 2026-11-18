@@ -89,6 +89,21 @@ test("there is no step where the quarters end and the hours take over", () => {
   }
 });
 
+test("where the two models disagree, the stronger rain of the two is shown", () => {
+  // The model by the hour has drizzle for the hour now is in and the next; the finer one has none, and a
+  // shower of its own from 23:00 to 23:30.
+  const series = seriesOf({ hours: [0.4, 0.3, ...of(46, 0)], quarters: [...of(8, 0), 1, 1, ...of(14, 0)] });
+  assert.equal(series.levels[0], levelOf(0.4), "rain only the hours have is not hidden by the quarters");
+  assert.equal(series.levels[21], levelOf(0.3));
+  assert.equal(series.levels[22], levelOf(4), "and rain only the quarters have is there too");
+  assert.equal(series.levels[27], levelOf(4));
+  assert.equal(series.levels[28], 0);
+  // Where both have rain, the stronger: the quarters' shape stands out of the hours' even layer.
+  const both = seriesOf({ hours: of(48, 0.4), quarters: [...of(4, 0), 1, ...of(19, 0)] });
+  assert.equal(both.levels[9], levelOf(0.4));
+  assert.equal(both.levels[10], levelOf(4));
+});
+
 test("without quarters the hours are all there is", () => {
   const series = seriesOf({ hours: [1, 2, 3] });
   assert.equal(series.fine, false);
